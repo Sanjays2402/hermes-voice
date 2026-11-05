@@ -37,6 +37,8 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 | Plan HA changes | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --dry-run` |
 | Install + configure HA | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --set-default` |
 | Text test through HA | `python3 ${HERMES_SKILL_DIR}/scripts/verify.py --recall` |
+| Background work on an Echo Show's screen | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --install` |
+| Show every profile's work (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --screen-activity all` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
 
 ## Ground rules
@@ -112,7 +114,17 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
    uploads both files on the Echo's settings page (`http://<echo-ip>:28931/`, approval by the Echo's action
    button; steps in `references/devices.md`), then you set the Echo's `select.<echo>_wake_word` entity to
    "Hey Hermes" through HA's API (`POST /api/services/select/select_option`).
-4. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
+4. **Echo Show screen (optional).** With an Echo Show, offer the Hermes screen (`references/devices.md`,
+   "Hermes Screen on an Echo Show"): an app on the Show that shows the agent, not the house. Its idle screen
+   can list Hermes' background work from the kanban board (running, waiting for review or blocked, finished
+   in the last 3 hours). That needs the read-only helper next to Hermes:
+   `screen_activity.py --profile voice --install` (a login service on 127.0.0.1:8660, guarded by the
+   profile's API key; `--check` prints what the screen would get). By default the screen shows only tasks
+   assigned to the voice profile. If the user asks to see all their profiles' work ("show everything on the
+   screen"), tell them that anyone who can see the Show will then see every profile's task titles, and on
+   their yes run `ha_setup.py --profile voice --screen-activity all` (`profile` to go back, `off` to hide
+   it). The same choice is in Home Assistant: Hermes Voice → Configure → "Background work on the screen".
+5. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
    With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
    Success = a reply in the profile's own voice/personality and `"recalled": true`.
 

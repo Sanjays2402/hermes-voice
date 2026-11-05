@@ -221,21 +221,42 @@
     if (state.tz) dopts.timeZone = state.tz;
     $("date").textContent = new Intl.DateTimeFormat(state.locale, dopts).format(now);
     $("context").innerHTML = contextLine();
+    if (connected && (state.mode === "idle" || !$("overview").hidden)) refreshOverview(false);
     if (state.holdUntil && Date.now() >= state.holdUntil) { state.holdUntil = 0; updateMode(); }
   }
 
-  /** One line on the idle screen: the next scheduled job, else the last thing asked, else a hint. */
+  const escHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+
+  /** "12 min", "1 h 5 min" since an epoch-seconds time. */
+  function since(sec) {
+    const m = Math.max(1, Math.round((Date.now() / 1000 - sec) / 60));
+    return m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+  }
+
+  /** Background work, most urgent first: running, needs you, just finished (screen_activity.py via hermes_voice). */
+  function workItems() {
+    const act = (state.overview && state.overview.activity) || {};
+    const all = act.scope === "all";
+    const who = (t) => (all && t.assignee ? " · " + escHtml(t.assignee) : "");
+    return [
+      ...(act.running || []).map((t) => `<span class="act run">◐</span> <b>${escHtml(t.title)}</b>${who(t)} · ${since(t.started_at || Date.now() / 1000)}`),
+      ...(act.attention || []).map((t) => `<span class="act need">●</span> ${t.status === "review" ? "Ready for your review" : "Blocked"}: <b>${escHtml(t.title)}</b>${who(t)}`),
+      ...(act.recent || []).map((t) => `<span class="act done">✓</span> <b>${escHtml(t.title)}</b>${who(t)} · ${escHtml(relTime(t.completed_at))}`),
+    ];
+  }
+
+  /** The idle screen's lines: background work, else the next scheduled job, else nothing. */
   function contextLine() {
-    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    const esc = escHtml;
+    const work = workItems();
+    if (work.length) return work.slice(0, 3).map((w) => `<div class="work">${w}</div>`).join("");
     const jobs = (state.overview && state.overview.jobs) || [];
     const next = jobs
       .filter((j) => j.enabled !== false && j.next_run_at)
       .sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at))[0];
     if (next) return `Next: <b>${esc(next.name || "a scheduled job")}</b> ${esc(relTime(next.next_run_at))}`;
-    const t = state.turn;
-    if (t.heard && t.at) return `Last asked ${esc(relTime(t.at))}: <b>${esc(t.heard)}</b>`;
-    if (state.mode === "offline") return "Waiting for Home Assistant…";
-    return "Say <b>“Hey Hermes”</b>";
+    if (state.mode === "offline") return "Waiting for Home Assistant\u2026";
+    return "";
   }
 
   // ---------------------------------------------------------------------------- feed handling --
@@ -407,13 +428,16 @@
   }
 
   // --------------------------------------------------------------------------------- overview --
+  let refreshing = false;
   async function refreshOverview(force) {
-    if (!force && Date.now() - state.overviewAt < 60000) return;
+    if (!force && Date.now() - state.overviewAt < 30000) return;
+    if (refreshing) return;
+    refreshing = true;
     try {
       state.overview = DEMO ? demoOverview() : await call({ type: "hermes_voice/screen/overview" });
       state.overviewAt = Date.now();
       renderOverview();
-    } catch { /* shown as stale */ }
+    } catch { /* shown as stale */ } finally { refreshing = false; }
   }
 
   function renderOverview() {
@@ -441,12 +465,19 @@
     $("ov-profile").textContent = ov.profile ? "· " + ov.profile : "";
     $("ov-updated").textContent = state.overviewAt ? "updated " + relTime(state.overviewAt / 1000) : "";
     const jobs = ov.jobs || [];
+    const work = workItems().slice(0, 4).map((html) => {
+      const el = document.createElement("li");
+      el.className = "w";
+      el.innerHTML = html;
+      return el;
+    });
+    const scheduled = jobs.slice(0, Math.max(1, 6 - work.length)).map((j) =>
+      li(j.name || "Job", [j.schedule_display, j.next_run_at ? "next " + relTime(j.next_run_at) : j.enabled === false ? "paused" : ""].filter(Boolean).join(" · ")),
+    );
+    const note = ov.errors && ov.errors.activity ? [empty("Background work: helper not reachable")] : [];
     $("ov-jobs").replaceChildren(
-      ...(jobs.length
-        ? jobs.slice(0, 6).map((j) =>
-            li(j.name || "Job", [j.schedule_display, j.next_run_at ? "next " + relTime(j.next_run_at) : j.enabled === false ? "paused" : ""].filter(Boolean).join(" · ")),
-          )
-        : [empty(ov.errors && ov.errors.jobs ? "Could not load jobs" : "Nothing scheduled")]),
+      ...(work.length || scheduled.length ? [...work, ...scheduled] : [empty(ov.errors && ov.errors.jobs ? "Could not load jobs" : "Nothing running or scheduled")]),
+      ...note,
     );
     const sessions = ov.sessions || [];
     $("ov-sessions").replaceChildren(
@@ -461,10 +492,10 @@
     const rows = [
       ["Gateway", h.status ? `<span class="${h.status === "ok" ? "ok" : "warn"}">${h.status}</span>` : "—"],
       ["Working", h.gateway_busy ? '<span class="warn">busy</span>' : h.active_agents ? h.active_agents + " running" : "idle"],
-      ["Requests today", m.requests != null ? m.requests : "—"],
-      ["Messages today", m.messages != null ? m.messages : "—"],
-      ["Tokens today", m.tokens != null ? Number(m.tokens).toLocaleString() : "—"],
-      ["Slowest (p95)", m.latency_p95_ms != null ? (m.latency_p95_ms / 1000).toFixed(1) + " s" : "—"],
+      ["Requests", m.requests != null ? m.requests : "—"],
+      ["Messages", m.messages != null ? m.messages : "—"],
+      ["Tokens", m.tokens != null ? Number(m.tokens).toLocaleString() : "—"],
+      ["Slowest", m.latency_p95_ms != null ? (m.latency_p95_ms / 1000).toFixed(1) + " s" : "—"],
     ];
     $("ov-status").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
@@ -569,6 +600,12 @@
         { name: "Morning brief", schedule_display: "weekdays 7:00", next_run_at: new Date(now + 13 * 3600e3).toISOString() },
         { name: "Check the build", schedule_display: "every 2 h", next_run_at: new Date(now + 47 * 60e3).toISOString() },
       ],
+      activity: {
+        scope: "all",
+        running: [{ title: "Research Echo Show 8 support", assignee: "research", started_at: now / 1000 - 12 * 60 }],
+        attention: [{ title: "Upstream issue draft for echo-dot-assist", assignee: "voice", status: "review" }],
+        recent: [{ title: "Nightly research digest", assignee: "research", completed_at: now / 1000 - 20 * 60 }],
+      },
       sessions: [
         { title: "Weather in Dallas", last_active: now / 1000 - 120, message_count: 4, source: "api_server" },
         { title: "Days until Christmas", last_active: now / 1000 - 3600, message_count: 2, source: "api_server" },

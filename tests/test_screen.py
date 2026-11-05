@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import aiohttp
 from homeassistant.components import conversation
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import chat_session, device_registry as dr, entity_registry as er
@@ -13,7 +14,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.hermes_voice.const import CONF_STREAM
 
-from .conftest import BASE, MODELS, make_entry, reply
+from .conftest import BASE, KEY, MODELS, make_entry, reply
 from .test_streaming import SSE, chunk, stream, tool
 
 AGENT = "conversation.voice_spike"
@@ -185,7 +186,7 @@ async def test_overview(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
 ) -> None:
     """Jobs, sessions and health come through the integration; private fields stay behind; cached."""
-    await _setup(hass, aioclient_mock)
+    await _setup(hass, aioclient_mock, {"screen_activity": "off"})
     aioclient_mock.get(
         f"{ROOT}/api/jobs",
         json={"jobs": [{"id": "j1", "name": "Morning brief", "next_run_at": "t", "prompt": "secret prompt"}]},
@@ -226,3 +227,62 @@ async def test_screen_page_served(
     assert "app.js" in page and "Hermes screen" in page
     for asset in ("app.js", "style.css", "avatar-default.svg"):
         assert (await client.get(f"/hermes_voice/screen/{asset}")).status == 200
+
+
+async def test_overview_activity(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Background work comes from the activity helper on the gateway's host, with the entry's key; scope from options."""
+    entry = await _setup(hass, aioclient_mock)
+    for path in ("/api/jobs", "/api/sessions?limit=8", "/health/detailed"):
+        aioclient_mock.get(f"{ROOT}{path}", json={})
+    aioclient_mock.get(
+        "http://hermes.test:8660/activity?scope=profile",
+        json={
+            "scope": "profile",
+            "running": [
+                {"id": "t1", "title": "Research", "assignee": "voice", "started_at": 1, "body": "secret"}
+            ],
+            "attention": [],
+            "recent": [{"id": "t5", "title": "Digest", "completed_at": 2}],
+        },
+    )
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/overview"})
+    result = (await ws.receive_json())["result"]
+    assert result["activity"] == {
+        "scope": "profile",
+        "running": [{"id": "t1", "title": "Research", "assignee": "voice", "started_at": 1}],
+        "attention": [],
+        "recent": [{"id": "t5", "title": "Digest", "completed_at": 2}],
+    }
+    call = next(c for c in aioclient_mock.mock_calls if "8660" in str(c[1]))
+    assert call[3]["Authorization"] == f"Bearer {KEY}"
+    assert entry.options["screen_activity"] == "profile"  # the default
+
+
+async def test_overview_activity_off_and_all(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Off asks nothing; "all" asks for every profile; a missing helper is an error, not a failure."""
+    await _setup(hass, aioclient_mock, {"screen_activity": "off"})
+    for path in ("/api/jobs", "/api/sessions?limit=8", "/health/detailed"):
+        aioclient_mock.get(f"{ROOT}{path}", json={})
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/overview"})
+    result = (await ws.receive_json())["result"]
+    assert "activity" not in result and "activity" not in result["errors"]
+    assert not any("8660" in str(c[1]) for c in aioclient_mock.mock_calls)
+
+
+async def test_overview_activity_all_helper_down(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    await _setup(hass, aioclient_mock, {"screen_activity": "all", "activity_port": 9001})
+    for path in ("/api/jobs", "/api/sessions?limit=8", "/health/detailed"):
+        aioclient_mock.get(f"{ROOT}{path}", json={})
+    aioclient_mock.get("http://hermes.test:9001/activity?scope=all", exc=aiohttp.ClientConnectionError())
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/overview"})
+    result = (await ws.receive_json())["result"]
+    assert "activity" not in result and "activity" in result["errors"]

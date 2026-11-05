@@ -203,13 +203,27 @@ body[data-mode="error"] .turn-pane { display: flex; }
   font-size: 22px;
   line-height: 1.35;
   color: var(--ink-2);
-  max-width: 560px;
+  max-width: 600px;
+  max-height: 4.8em; /* three items: app.js shows at most three */
+  overflow: hidden;
+}
+.context:empty { display: none; }
+.context .work { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.context .work + .work { margin-top: 6px; }
+.act { display: inline-block; width: 1.1em; text-align: center; margin-right: 4px; }
+.act.run { color: var(--thinking); animation: spin 2.4s linear infinite; }
+.act.need { color: var(--answering); }
+.act.done { color: var(--local); }
+.ov-list .w {
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--ink-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.context:empty { display: none; }
+.ov-list .w b { color: var(--ink); font-weight: 500; }
 .context b { color: var(--ink); font-weight: 500; }
 
 .turn-pane { justify-content: flex-start; padding-top: 10px; }
@@ -325,7 +339,7 @@ body[data-mode="idle"] .corner-clock, body[data-mode="offline"] .corner-clock { 
   line-height: 1;
   padding: 0 0 4px;
 }
-.ov-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.35fr 0.85fr; gap: 14px; }
+.ov-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.45fr 1.15fr 0.8fr; gap: 14px; }
 .ov-col {
   min-height: 0;
   background: var(--bg-2);

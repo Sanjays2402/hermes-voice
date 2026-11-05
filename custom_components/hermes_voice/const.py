@@ -23,10 +23,18 @@ CONF_TIMEOUT: Final = "timeout"
 CONF_STREAM: Final = "stream"
 CONF_WORKING_PHRASE: Final = "working_phrase"
 CONF_SEND_TIME: Final = "send_time"
+CONF_SCREEN_ACTIVITY: Final = "screen_activity"
+CONF_ACTIVITY_PORT: Final = "activity_port"
 
 SESSION_PER_CONVERSATION: Final = "per_conversation"
 SESSION_PER_DEVICE: Final = "per_device"
 SESSION_MODES: Final = [SESSION_PER_CONVERSATION, SESSION_PER_DEVICE]
+
+# What the Hermes screen shows of Hermes' background work (skill/.../screen_activity.py serves it).
+ACTIVITY_OFF: Final = "off"
+ACTIVITY_PROFILE: Final = "profile"  # tasks assigned to this entry's profile
+ACTIVITY_ALL: Final = "all"  # every profile's tasks: opt-in
+ACTIVITY_SCOPES: Final = [ACTIVITY_OFF, ACTIVITY_PROFILE, ACTIVITY_ALL]
 
 DEFAULT_DISPLAY_NAME: Final = "Hermes"
 DEFAULT_SESSION_MODE: Final = SESSION_PER_CONVERSATION
@@ -44,6 +52,8 @@ DEFAULT_STREAM: Final = True
 DEFAULT_WORKING_PHRASE: Final = "One moment."
 # Hermes has no clock: tell it Home Assistant's local date and time on every turn.
 DEFAULT_SEND_TIME: Final = True
+DEFAULT_SCREEN_ACTIVITY: Final = ACTIVITY_PROFILE
+DEFAULT_ACTIVITY_PORT: Final = 8660
 
 DEFAULT_OPTIONS: Final = {
     CONF_SESSION_MODE: DEFAULT_SESSION_MODE,
@@ -56,6 +66,8 @@ DEFAULT_OPTIONS: Final = {
     CONF_STREAM: DEFAULT_STREAM,
     CONF_WORKING_PHRASE: DEFAULT_WORKING_PHRASE,
     CONF_SEND_TIME: DEFAULT_SEND_TIME,
+    CONF_SCREEN_ACTIVITY: DEFAULT_SCREEN_ACTIVITY,
+    CONF_ACTIVITY_PORT: DEFAULT_ACTIVITY_PORT,
 }
 
 # Hermes API server headers (hermes-agent gateway/platforms/api_server_openai_routes.py).

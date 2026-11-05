@@ -164,11 +164,11 @@ class HermesClient:
         return [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
 
     async def async_get_json(self, path: str, request_timeout: float = 5) -> Any:
-        """GET a read-only path on the gateway root (``/api/jobs``, ``/health/detailed``, ...)."""
-        root = self.base_url.removesuffix("/v1")
+        """GET a read-only path on the gateway root (``/api/jobs``, ...), or a full URL with the same key."""
+        url = path if path.startswith(("http://", "https://")) else self.base_url.removesuffix("/v1") + path
         try:
             async with self._session.get(
-                f"{root}{path}", headers=self._headers, timeout=aiohttp.ClientTimeout(total=request_timeout)
+                url, headers=self._headers, timeout=aiohttp.ClientTimeout(total=request_timeout)
             ) as resp:
                 if resp.status in (401, 403):
                     raise HermesAuthError(f"HTTP {resp.status}")
