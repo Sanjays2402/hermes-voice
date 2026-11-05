@@ -304,6 +304,37 @@ Over SSH, `udisksctl mount` fails (it wants a desktop session); `sudo mount /dev
 moving the work drive to another port, stop the setup and `adb kill-server`: the setup's adb server keeps the
 drive busy.
 
+## Hermes Screen on an Echo Show
+
+A screen for the agent instead of hassmic's face: idle, a close-up of the avatar's eyes behind the clock and the
+next scheduled job; on the wake word it zooms out to the whole avatar on the right while your words, Hermes'
+tools and its answer appear on the left. Design and options: [docs/show-screen.md](../../docs/show-screen.md).
+It is a small app (`devices/echo/screen-app/`, about 13 KB, network permission only) that shows the page
+hermes_voice serves at `/hermes_voice/screen`.
+
+1. **A Home Assistant user for the screen**, not an admin (Settings → People → Users → Add user, turn off
+   "Administrator", "Can only log in from the local network" on). Log in as it once and create a long-lived
+   token (Profile → Security). The screen needs nothing more.
+2. **Build the app** on a Mac or Linux PC with a JDK and the Android SDK (`devices/echo/screen-app/build.sh`
+   says what to install; it accepts Google's SDK license). Or take `hermes-screen.apk` from a release.
+3. **adb to the Show**: on its settings page (`http://<echo-ip>:28931/`, log in with both volume keys),
+   System → **Debug access**, approve with both volume keys again; adb is open on port 5555 for 30 minutes.
+   ```bash
+   adb connect <echo-ip>:5555
+   adb install -r build/hermes-screen.apk
+   adb shell am start -n org.hermesvoice.screen/.MainActivity \
+     --es url 'http://<home-assistant>:8123/hermes_voice/screen?device=<device id>#token=<token>'
+   ```
+   The device id is in the Echo's device page address in Home Assistant. The token goes in the `#` part once:
+   the page keeps it, and the app stores the address without it.
+4. **Make it the home screen**: the settings page's **Screen** page lists the apps hassmic found when its screen
+   started, so an app installed afterwards is missing until that restarts (a reboot, or `adb shell` and kill
+   the screen's `app_process`, a child of `/system/hassmic/hassmic`; voice keeps running). Then pick
+   **Hermes Screen**. The pull-down from the top still reaches hassmic's face and music; Home brings Hermes
+   Screen back.
+
+To go back: pick the face on the Screen page; `adb uninstall org.hermesvoice.screen` removes the app.
+
 ## Wake word: "Hey Hermes"
 
 echo-dot-assist uses Amazon's "Alexa" engine by default. It can instead run a microWakeWord model, and this

@@ -10,6 +10,8 @@
  *                         Without one, the login of Home Assistant's own frontend in this browser is used.
  *   ?hold=<seconds>       how long an answer stays up after the Echo goes idle (default 60)
  *   ?avatar=<url>         a picture to use instead of the default avatar
+ *   ?eyes=<x>,<y>         where the eyes are in that picture (fractions, e.g. 0.5,0.4): the idle screen zooms there
+ *   ?zoom=<n>             how far the idle screen zooms in (default 8)
  *   ?demo                 play a scripted conversation, no Home Assistant needed (?demo=idle: stay idle)
  */
 (() => {
@@ -31,7 +33,7 @@
   // ------------------------------------------------------------------------------------- state --
   let connected = false;
   const state = {
-    device: params.get("device") || store.get("device") || null, // null: every device
+    device: DEMO ? null : params.get("device") || store.get("device") || null, // null: every device
     focus: null, // the device shown when following every device
     satellite: {}, // device id -> idle | listening | processing | responding | unavailable
     turn: emptyTurn(),
@@ -507,7 +509,45 @@
     applyAvatar();
   }
 
+  // Idle: the avatar fills the screen behind the clock, zoomed onto her eyes. The default drawing's eyes sit at
+  // about (0.33, 0.45) of the drawing; a custom picture is shown with "cover", so its point is of the circle.
+  const ZOOM = Math.max(2, Number(params.get("zoom")) || 8);
+  function eyes() {
+    const given = (params.get("eyes") || "").split(",").map(Number);
+    if (given.length === 2 && given.every((n) => n >= 0 && n <= 1)) return given;
+    return avatars.base ? [0.5, 0.4] : [0.33, 0.45];
+  }
+  function updateZoom() {
+    const wrap = $("avatar-wrap");
+    const size = 300; // .avatar-wrap
+    const side = 34;
+    const left = innerWidth - side - size;
+    const top = innerHeight / 2 - size / 2;
+    // Where the eyes are inside the wrap: the avatar is 86% of it, centred; the default drawing is a mask
+    // 92% wide, placed at 42% down, with the drawing's own aspect ratio (5487 × 5559).
+    const av = size * 0.86;
+    const inset = (size - av) / 2;
+    const [fx, fy] = eyes();
+    let px;
+    let py;
+    if (avatars.base) {
+      px = inset + fx * av;
+      py = inset + fy * av;
+    } else {
+      const w = av * 0.92;
+      const h = w * (5559 / 5487);
+      px = inset + (av - w) / 2 + fx * w;
+      py = inset + (av - h) * 0.42 + fy * h;
+    }
+    // Put the eyes a little right of centre, where the clock leaves room.
+    const tx = innerWidth * 0.66 - left - ZOOM * px;
+    const ty = innerHeight * 0.44 - top - ZOOM * py;
+    wrap.style.setProperty("--zoom", `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${ZOOM})`);
+  }
+  addEventListener("resize", updateZoom);
+
   function applyAvatar() {
+    updateZoom();
     const el = $("avatar");
     const url = avatars[state.mode] || avatars.base;
     if (!url) {
@@ -580,6 +620,7 @@
   // ------------------------------------------------------------------------------------ start --
   setInterval(tick, 1000);
   tick();
+  updateZoom();
   loadAvatars();
   if (DEMO) runDemo();
   else connect();

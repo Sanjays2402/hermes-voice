@@ -44,21 +44,63 @@ body[data-mode="offline"] { --accent: var(--ink-3); }
 .screen { position: fixed; inset: 0; padding: var(--safe-top) var(--side) var(--safe-bottom); }
 [hidden] { display: none !important; }
 
-/* Layout: words on the left, the avatar on the right. */
-.stage { display: flex; flex-direction: row-reverse; align-items: center; gap: 30px; height: 100%; }
-.content { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+/* Layout: words on the left, the avatar on the right. When idle the avatar is the background instead: zoomed
+   onto her eyes behind the clock (app.js sets --zoom from where the eyes are), and it zooms out on the wake word. */
+.stage { position: relative; height: 100%; }
+.content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-right: 330px;
+}
+body[data-mode="answering"] .content,
+body[data-mode="done"] .content { padding-right: 270px; }
+body[data-mode="idle"] .content,
+body[data-mode="offline"] .content { padding-right: 0; }
+
+/* Keeps the clock readable over the eyes. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 82%, transparent) 34%, transparent 72%),
+    linear-gradient(0deg, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 30%);
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+body[data-mode="idle"] .scrim,
+body[data-mode="offline"] .scrim { opacity: 1; }
 
 /* Avatar ------------------------------------------------------------------------------------- */
 .avatar-wrap {
-  position: relative;
-  flex: 0 0 auto;
+  position: fixed;
+  z-index: 0;
+  right: var(--side);
+  top: calc(50% - 150px);
   width: 300px;
   height: 300px;
   display: grid;
   place-items: center;
+  transform-origin: 0 0;
+  transition: transform 1100ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* Smaller while answering, still against the right edge and centred. */
 body[data-mode="answering"] .avatar-wrap,
-body[data-mode="done"] .avatar-wrap { width: 230px; height: 230px; }
+body[data-mode="done"] .avatar-wrap { transform: translate(69px, 34.5px) scale(0.77); }
+body[data-mode="idle"] .avatar-wrap,
+body[data-mode="offline"] .avatar-wrap { transform: var(--zoom, none); }
+body[data-mode="idle"] .ring, body[data-mode="idle"] .halo,
+body[data-mode="offline"] .ring, body[data-mode="offline"] .halo { opacity: 0; animation: none; }
+body[data-mode="idle"] .avatar {
+  opacity: 0.34;
+  background: linear-gradient(160deg, #ffffff 40%, var(--idle) 140%);
+  animation: drift 24s ease-in-out infinite alternate;
+}
+body[data-mode="offline"] .avatar { opacity: 0.16; animation: none; }
+@keyframes drift { from { transform: scale(1); } to { transform: scale(1.025) translateX(-1%); } }
 
 .avatar {
   position: relative;
