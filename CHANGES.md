@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hermes Screen app for the Echo Show (`devices/echo/screen-app/`, step 3 of `docs/show-screen.md`): a
+  full-screen WebView of the screen page, network permission only, built with `build.sh` (no Gradle),
+  installed over echo-dot-assist's debug access and picked as the home app. The idle screen is now a
+  close-up of the avatar's eyes behind the clock that zooms out to the whole avatar on the wake word.
 - Hermes screen page (`docs/show-screen.md`, step 2) at `/hermes_voice/screen`: idle (clock, next job or
   last question), listening, thinking (question, tool activity), answering (the reply as it is written,
   links and lists included), Home Assistant's own answers, and a tap-for overview (jobs, recent

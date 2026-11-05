@@ -1,8 +1,12 @@
 # Hermes screen for the Echo Show (design)
 
-Status: steps 1 (the integration's live feed) and 2 (the page) are built and tested live with an Echo Show 5,
-the page in a desktop browser. Steps 3 (the app on the Show) and 4 (memories and background work in the
-overview) are not built yet.
+Status: steps 1–3 are built and run on an Echo Show 5 as its home screen (the feed, the page, the app:
+install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-screen-on-an-echo-show)). Step 4
+(memories and background work in the overview) waits on Hermes exposing them.
+
+Idle shows a close-up of the avatar's eyes behind the clock (zoom 8×; `?zoom=`, and `?eyes=x,y` for where the
+eyes are in a custom picture); on the wake word it zooms out to the whole avatar on the right, and back after
+the answer. Only transform and opacity animate.
 
 ## Using the page
 
