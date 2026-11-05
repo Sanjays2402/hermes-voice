@@ -1,6 +1,6 @@
 ---
 name: hermes-voice-setup
-description: Turn one Hermes profile into a voice assistant through Home Assistant Assist (hermes_voice integration), with an Echo Dot as the speaker.
+description: Turn one Hermes profile into a voice assistant through Home Assistant Assist (hermes_voice integration), with an Echo Dot or Echo Show as the speaker.
 version: 0.1.0
 author: hermes-voice contributors
 license: MIT
@@ -24,7 +24,7 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 ## When to Use
 
 - The user wants to talk to their Hermes agent by voice, through Home Assistant.
-- The user has (or wants) an Echo Dot running echo-dot-assist, or any other Assist voice satellite.
+- The user has (or wants) an Echo Dot or Echo Show running echo-dot-assist, or any other Assist voice satellite.
 - The user asks to repair or re-verify an existing hermes_voice setup.
 
 ## Quick Reference

@@ -9,6 +9,27 @@ Read the [Echo Dot 2 recovery notes](../devices/echo/README.md#echo-dot-2-recove
 for the driver failure, tested short point and firmware/slot findings. Stop a waiting installer
 before running another one. A rooted-system message does not verify both slots or a fallback.
 
+## Echo Show 5: "Exploit most likely successful!" but the Show boots back into Amazon's setup
+
+amonet prints that as soon as the Show stops answering; it does not check the unlock. If the Show comes back
+on Amazon's language screen, or Volume + at power-on shows the Echo logo with a red triangle, the unlock did
+not take. From three-button fastboot (Volume −, Volume +, Mute while plugging in power), `fastboot getvar
+unlock_status` says `false`. Nothing was written: run the setup again and type `YES` again. Watch the Show's
+screen during the run, and prefer a USB 2.0 port on the PC itself. Details:
+[devices/echo/README.md](../devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb).
+
+## echo-dot-assist setup downloads the Android NDK and runs out of disk
+
+It builds from source when GitHub has no release build of the commit you cloned (a commit pushed minutes ago,
+or local changes). Check out the newest release tag (`git tag -l 'v*'`) or wait for GitHub to build the commit,
+then run the setup again: it offers "Use it (recommended): nothing to compile". On a live USB, also work from a
+16 GB drive, not the RAM-backed live session.
+
+## The Echo stopped answering after uploading the "Hey Hermes" model
+
+Uploading the model removes "Alexa" and leaves the Echo's wake word slot empty. In Home Assistant, set the
+Echo's Wake word (`select.<echo>_wake_word`) to **Hey Hermes**.
+
 ## The assistant says "I can't reach my brain right now"
 
 That is hermes_voice's fallback. The HA log has the reason (`Hermes turn failed (<kind>, session <id>)`).

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Echo Show 5 1st gen tested end to end: install from an Ubuntu live USB with exact downloads, the unlock that
+  reports success without unlocking (and how to check), disk space (16 GB drive), the release build vs. the
+  NDK, timings, the screen, and the wake word step that leaves the Echo deaf if skipped
+  (`devices/echo/README.md`, troubleshooting).
 - Tell Hermes the local date and time on every turn (Home Assistant's clock and time zone), so "what time
   is it?" and date questions work; option *Tell Hermes the date and time*, on by default. Before, Hermes
   searched the web for the time and could not read it.
