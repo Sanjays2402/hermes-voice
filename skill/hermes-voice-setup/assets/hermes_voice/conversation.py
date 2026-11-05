@@ -35,6 +35,7 @@ from .const import (
     LOGGER,
     MAX_HEADER_LEN,
 )
+from .screen import ScreenHub, async_get_hub
 
 PARALLEL_UPDATES = 0
 
@@ -103,10 +104,14 @@ class HermesConversationEntity(conversation.ConversationEntity):
         """Register as an agent."""
         await super().async_added_to_hass()
         conversation.async_set_agent(self.hass, self.entry, self)
+        if hub := async_get_hub(self.hass):
+            hub.agent_ids.add(self.entity_id)
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister."""
         conversation.async_unset_agent(self.hass, self.entry)
+        if hub := async_get_hub(self.hass):
+            hub.agent_ids.discard(self.entity_id)
         await super().async_will_remove_from_hass()
 
     async def _async_handle_message(
@@ -139,21 +144,27 @@ class HermesConversationEntity(conversation.ConversationEntity):
             "user_key": render_user_key(self._opt(CONF_USER_KEY), user_id, user_input.device_id),
             "request_timeout": float(self._opt(CONF_TIMEOUT)),
         }
+        screen = _Screen(async_get_hub(self.hass), user_input.device_id)
+        screen.start(user_input.text)
         if self._opt(CONF_STREAM):
             async for _content in chat_log.async_add_delta_content_stream(
-                user_input.agent_id, self._stream_deltas(request, session_id)
+                user_input.agent_id, self._stream_deltas(request, session_id, screen)
             ):
                 pass
+            screen.done()
             return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
         try:
             reply = await data.client.async_chat(**request)
+            screen.delta(reply.text)
             text = reply.text
             if self._opt(CONF_VOICE_CLEANUP):
                 text = clean_for_voice(text) or text.strip()
         except HermesError as err:
             self._log_failure(err, session_id)
+            screen.error(err)
             text = self._opt(CONF_FALLBACK_MESSAGE)
+        screen.done()
 
         chat_log.async_add_assistant_content_without_tools(
             conversation.AssistantContent(agent_id=user_input.agent_id, content=text)
@@ -171,7 +182,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
         LOGGER.warning("Hermes turn failed (%s, session %s): %s", kind, session_id, err)
 
     async def _stream_deltas(
-        self, request: dict[str, Any], session_id: str
+        self, request: dict[str, Any], session_id: str, screen: _Screen
     ) -> AsyncIterator[conversation.AssistantContentDeltaDict | conversation.ToolResultContentDeltaDict]:
         """Turn Hermes' stream into chat log deltas.
 
@@ -203,7 +214,10 @@ class HermesConversationEntity(conversation.ConversationEntity):
 
         try:
             async for event in self.entry.runtime_data.client.async_chat_stream(**request):
+                if isinstance(event, ToolEvent):
+                    screen.tool(event)
                 if isinstance(event, TextDelta):
+                    screen.delta(event.text)
                     if piece := chunker.feed(event.text):
                         for d in assistant():
                             yield d
@@ -241,6 +255,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
                 yield say(piece)
         except HermesError as err:
             self._log_failure(err, session_id)
+            screen.error(err)
             for d in assistant():
                 yield d
             yield say(self._opt(CONF_FALLBACK_MESSAGE))
@@ -249,3 +264,33 @@ class HermesConversationEntity(conversation.ConversationEntity):
             for d in assistant():
                 yield d
             yield say(self._opt(CONF_FALLBACK_MESSAGE))
+
+
+class _Screen:
+    """One turn's events for Hermes screens (screen.py). Does nothing when no hub is set up."""
+
+    def __init__(self, hub: ScreenHub | None, device_id: str | None) -> None:
+        self.hub = hub
+        self.device_id = device_id
+        self.text = ""  # the reply as Hermes wrote it, before voice cleanup: the screen shows it all
+
+    def start(self, heard: str) -> None:
+        if self.hub:
+            self.hub.turn_start(self.device_id, heard)
+
+    def delta(self, text: str) -> None:
+        self.text += text
+        if self.hub and text:
+            self.hub.delta(self.device_id, text)
+
+    def tool(self, event: ToolEvent) -> None:
+        if self.hub:
+            self.hub.tool(self.device_id, event.tool_call_id, event.tool, event.label, event.running)
+
+    def error(self, err: HermesError) -> None:
+        if self.hub:
+            self.hub.error(self.device_id, type(err).__name__)
+
+    def done(self) -> None:
+        if self.hub:
+            self.hub.reply_done(self.device_id, self.text)

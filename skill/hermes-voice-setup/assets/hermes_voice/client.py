@@ -163,6 +163,25 @@ class HermesClient:
             raise HermesConnectionError(str(err)) from err
         return [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
 
+    async def async_get_json(self, path: str, request_timeout: float = 5) -> Any:
+        """GET a read-only path on the gateway root (``/api/jobs``, ``/health/detailed``, ...)."""
+        root = self.base_url.removesuffix("/v1")
+        try:
+            async with self._session.get(
+                f"{root}{path}", headers=self._headers, timeout=aiohttp.ClientTimeout(total=request_timeout)
+            ) as resp:
+                if resp.status in (401, 403):
+                    raise HermesAuthError(f"HTTP {resp.status}")
+                if resp.status != 200:
+                    raise HermesConnectionError(f"HTTP {resp.status}")
+                return await resp.json(content_type=None)
+        except HermesError:
+            raise
+        except TimeoutError as err:
+            raise HermesTimeoutError(f"timeout on {path}") from err
+        except (aiohttp.ClientError, ValueError) as err:
+            raise HermesConnectionError(str(err)) from err
+
     def _request(
         self,
         model: str,
