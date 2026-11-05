@@ -56,7 +56,6 @@ body[data-mode="offline"] { --accent: var(--ink-3); }
   height: 300px;
   display: grid;
   place-items: center;
-  transition: width 500ms ease, height 500ms ease;
 }
 body[data-mode="answering"] .avatar-wrap,
 body[data-mode="done"] .avatar-wrap { width: 230px; height: 230px; }
@@ -162,8 +161,6 @@ body[data-mode="error"] .turn-pane { display: flex; }
   font-size: 22px;
   line-height: 1.35;
   color: var(--ink-2);
-  border-left: 3px solid var(--line);
-  padding-left: 14px;
   max-width: 560px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
