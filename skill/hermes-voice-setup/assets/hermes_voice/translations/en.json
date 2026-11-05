@@ -45,7 +45,8 @@
           "fallback_message": "Spoken fallback on errors",
           "timeout": "Timeout",
           "stream": "Stream replies",
-          "working_phrase": "Working phrase"
+          "working_phrase": "Working phrase",
+          "send_time": "Tell Hermes the date and time"
         },
         "data_description": {
           "session_mode": "Per conversation: one Hermes session per Assist conversation (Home Assistant ends a conversation after 5 minutes of silence). Per device: one session per voice device that continues until it has been idle for the reset time.",
@@ -55,7 +56,8 @@
           "voice_instruction": "Added as a system message on every turn. It does not replace the profile's SOUL.md personality.",
           "fallback_message": "Spoken instead of raw error text when Hermes is rate limited, slow or unreachable.",
           "stream": "Start speaking while Hermes is still writing (needs a text-to-speech engine that supports streaming, such as Piper via Wyoming).",
-          "working_phrase": "Said when Hermes starts a tool (web search, ...) before saying anything else, so a slow answer does not start with silence. Leave empty to turn off. Needs Stream replies."
+          "working_phrase": "Said when Hermes starts a tool (web search, ...) before saying anything else, so a slow answer does not start with silence. Leave empty to turn off. Needs Stream replies.",
+          "send_time": "Adds Home Assistant's local date and time to the system message on every turn, so Hermes can answer \"what time is it?\" and date questions. Hermes has no clock of its own."
         }
       }
     }

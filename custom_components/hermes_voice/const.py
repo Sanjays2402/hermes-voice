@@ -22,6 +22,7 @@ CONF_FALLBACK_MESSAGE: Final = "fallback_message"
 CONF_TIMEOUT: Final = "timeout"
 CONF_STREAM: Final = "stream"
 CONF_WORKING_PHRASE: Final = "working_phrase"
+CONF_SEND_TIME: Final = "send_time"
 
 SESSION_PER_CONVERSATION: Final = "per_conversation"
 SESSION_PER_DEVICE: Final = "per_device"
@@ -41,6 +42,8 @@ DEFAULT_TIMEOUT: Final = 30
 DEFAULT_STREAM: Final = True
 # Spoken when Hermes starts a tool (web search, ...) before it has said anything.
 DEFAULT_WORKING_PHRASE: Final = "One moment."
+# Hermes has no clock: tell it Home Assistant's local date and time on every turn.
+DEFAULT_SEND_TIME: Final = True
 
 DEFAULT_OPTIONS: Final = {
     CONF_SESSION_MODE: DEFAULT_SESSION_MODE,
@@ -52,6 +55,7 @@ DEFAULT_OPTIONS: Final = {
     CONF_TIMEOUT: DEFAULT_TIMEOUT,
     CONF_STREAM: DEFAULT_STREAM,
     CONF_WORKING_PHRASE: DEFAULT_WORKING_PHRASE,
+    CONF_SEND_TIME: DEFAULT_SEND_TIME,
 }
 
 # Hermes API server headers (hermes-agent gateway/platforms/api_server_openai_routes.py).

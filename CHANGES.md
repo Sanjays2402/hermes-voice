@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Tell Hermes the local date and time on every turn (Home Assistant's clock and time zone), so "what time
+  is it?" and date questions work; option *Tell Hermes the date and time*, on by default. Before, Hermes
+  searched the web for the time and could not read it.
+- `ha_setup.py --set-default` also turns on *Prefer handling commands locally* in the pipeline (time,
+  timers, device control answered by Home Assistant); `--no-local-commands` leaves it off.
+- `ha_setup.py` sets the time zone of a Home Assistant it onboards to this computer's (`--time-zone` to
+  choose); before, a new Home Assistant stayed on UTC and told the time hours off.
 - Document the tested Echo Dot 2 Windows recovery, including the MediaTek driver block,
   hardware short, firebreak firmware defaults and possible interference between installers.
 - Record the read-only A/B findings and the separate action-button approval for temporary debug access.

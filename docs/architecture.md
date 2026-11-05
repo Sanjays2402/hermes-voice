@@ -27,7 +27,10 @@ voice device ──audio──▶ HA Assist pipeline ──text──▶ hermes_
 3. `HermesClient.async_chat_stream` (`client.py`) POSTs `/v1/chat/completions` with `stream: true` (or
    `async_chat` without streaming when the *Stream replies* option is off), with
    `Authorization: Bearer <API_SERVER_KEY>`, `X-Hermes-Session-Id`, optional `X-Hermes-Session-Key`, and
-   `messages = [system: voice instruction (+ HA extra_system_prompt)] + [user: new text]`.
+   `messages = [system: voice instruction + local date and time (+ HA extra_system_prompt)] + [user: new text]`.
+   The time line ("Current local date and time: Thursday, November 5, 2026, 3:47 PM (America/Chicago).")
+   comes from Home Assistant's clock and time zone; Hermes has no clock of its own. Option *Tell Hermes the
+   date and time* turns it off.
    Hermes loads the session's history from its own database when the header is present
    (hermes-agent `gateway/platforms/api_server_openai_routes.py`), so earlier turns are not resent.
 4. Errors are classified (`HermesRateLimitError`, `HermesTimeoutError`, `HermesConnectionError`,

@@ -88,7 +88,12 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
    in the skill sets those up.
 5. Options: session mode, idle reset, voice cleanup, voice instruction, fallback message, timeout,
    optional memory scope key (`X-Hermes-Session-Key`), stream replies (on), working phrase ("One moment.",
-   said when Hermes starts a tool before saying anything; empty turns it off).
+   said when Hermes starts a tool before saying anything; empty turns it off), tell Hermes the date and time
+   (on: Hermes has no clock, so each turn carries Home Assistant's local date and time).
+6. Recommended: in the pipeline, turn on **Prefer handling commands locally**. Home Assistant then answers
+   its own sentences at once (the time, timers on the device, lights and other devices) and sends everything
+   else to Hermes. Those answers are Home Assistant's, not Hermes', and Hermes does not see those turns.
+   `ha_setup.py --set-default` turns it on.
 
 Requires Home Assistant 2026.10 or newer (the version tested).
 

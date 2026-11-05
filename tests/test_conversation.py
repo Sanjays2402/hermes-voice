@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.hermes_voice.const import (
     CONF_FALLBACK_MESSAGE,
     CONF_IDLE_RESET_MINUTES,
+    CONF_SEND_TIME,
     CONF_SESSION_MODE,
     CONF_USER_KEY,
     CONF_VOICE_CLEANUP,
@@ -84,11 +85,11 @@ async def test_per_conversation_session(hass: HomeAssistant, aioclient_mock: Aio
         assert "X-Hermes-Session-Key" not in headers
         assert body["stream"] is True  # streaming is the default
         assert body["model"] == "voice-spike"
-        # system (voice instruction) + only the latest user message: Hermes holds the history.
-        assert body["messages"] == [
-            {"role": "system", "content": DEFAULT_VOICE_INSTRUCTION},
-            {"role": "user", "content": text},
-        ]
+        # system (voice instruction, then the local time) + only the latest user message: Hermes holds the history.
+        system, user = body["messages"]
+        assert system["role"] == "system"
+        assert system["content"].startswith(DEFAULT_VOICE_INSTRUCTION + "\nCurrent local date and time: ")
+        assert user == {"role": "user", "content": text}
 
 
 async def test_same_opening_phrase_does_not_collide(
@@ -174,11 +175,35 @@ async def test_custom_and_empty_voice_instruction(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     """An empty voice instruction sends only the user message."""
-    await _setup(hass, aioclient_mock, {CONF_VOICE_INSTRUCTION: ""})
+    await _setup(hass, aioclient_mock, {CONF_VOICE_INSTRUCTION: "", CONF_SEND_TIME: False})
     aioclient_mock.post(CHAT, json=reply())
     await _say(hass, "hi")
     body, _ = _chat_calls(aioclient_mock)[0]
     assert body["messages"] == [{"role": "user", "content": "hi"}]
+
+
+async def test_local_time_sent(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, freezer: FrozenDateTimeFactory
+) -> None:
+    """Hermes has no clock: each turn carries Home Assistant's local date and time."""
+    await hass.config.async_set_time_zone("America/Chicago")
+    freezer.move_to("2026-11-05 21:47:00+00:00")
+    await _setup(hass, aioclient_mock, {CONF_VOICE_INSTRUCTION: ""})
+    aioclient_mock.post(CHAT, json=reply())
+    await _say(hass, "What time is it?")
+    freezer.move_to("2026-11-06 05:05:00+00:00")
+    await _say(hass, "And now?")
+    systems = [body["messages"][0] for body, _ in _chat_calls(aioclient_mock)]
+    assert systems == [
+        {
+            "role": "system",
+            "content": "Current local date and time: Thursday, November 5, 2026, 3:47 PM (America/Chicago).",
+        },
+        {
+            "role": "system",
+            "content": "Current local date and time: Thursday, November 5, 2026, 11:05 PM (America/Chicago).",
+        },
+    ]
 
 
 async def test_cleanup_applied_and_toggle(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
