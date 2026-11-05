@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-11-04
 
 First version.
 
@@ -18,7 +18,7 @@ First version.
   - optional voice instruction system message;
   - spoken fallback on rate limit, timeout, connection, auth and agent errors (including Hermes' HTTP 200
     replies that carry a failed run);
-  - 75 tests (pytest-homeassistant-custom-component), ruff and mypy clean.
+  - 81 tests (pytest-homeassistant-custom-component), ruff and mypy clean.
 - `hermes-voice-setup` Hermes skill, installable on its own (`hermes skills install`; carries the
   integration and wake word model in `assets/`), with idempotent, `--dry-run`-capable scripts:
   `voice_profile.py` (with `--tools safe|home|full|<list>`: what the voice assistant may do, and
@@ -31,3 +31,5 @@ First version.
   non-commercial use only.
 - Release files built from the committed tree by `tools/build_release.sh`: integration zip, skill zip,
   wake word zip, SHA256SUMS.
+
+Setup updates restart the authenticated Home Assistant instance through its API.

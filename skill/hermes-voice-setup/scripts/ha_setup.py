@@ -250,12 +250,11 @@ def main() -> None:
                 time.sleep(15)
                 break
             time.sleep(2)
-        in_docker = a.docker or bool(docker("ps", "--filter", f"name=^{a.container}$", "-q", check=False).stdout.strip())
-        if in_docker:
-            # Long grace period: a hard stop right after onboarding can lose HA's freshly written auth store.
-            docker("restart", "-t", "120", a.container)
-        else:
-            http("POST", ha + "/api/services/homeassistant/restart", token=token, body={}, timeout=60)
+        # Restart the authenticated HA instance, including when it runs in Docker.
+        status, _ = http("POST", ha + "/api/services/homeassistant/restart", token=token, body={}, timeout=60)
+        # HA may close the connection while restarting.
+        if status not in (0, 200):
+            die(f"Home Assistant rejected the restart request (HTTP {status})")
         time.sleep(10)
         if not wait_ha(ha):
             die("Home Assistant did not come back after restart")
