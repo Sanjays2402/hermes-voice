@@ -42,6 +42,22 @@ DEFAULT_COMPONENT = next(
 DOMAIN = "hermes_voice"
 
 
+def local_health_url(base_url: str, env: dict[str, str]) -> str:
+    """Where this machine can check the gateway: host.docker.internal means this machine."""
+    root = base_url.rstrip("/").rsplit("/v1", 1)[0]
+    if "host.docker.internal" in root:
+        root = f"http://127.0.0.1:{env.get('API_SERVER_PORT', '8642')}"
+    return root.split("/p/")[0] + "/health"
+
+
+def wait_gateway(url: str, seconds: int = 60) -> bool:
+    for _ in range(seconds // 2):
+        if http("GET", url, timeout=3)[0] == 200:
+            return True
+        time.sleep(2)
+    return False
+
+
 def wait_ha(url: str, seconds: int = 180) -> bool:
     for _ in range(seconds // 2):
         status, _ = http("GET", url + "/api/", timeout=3)
@@ -267,12 +283,25 @@ def main() -> None:
     if entry:
         say(f"hermes_voice entry for {norm} already exists ({entry['title']})")
     elif act(f"create hermes_voice entry '{name}' -> {norm}"):
-        f = http("POST", ha + "/api/config/config_entries/flow", token=token, body={"handler": DOMAIN})[1]
+        # The integration checks the gateway when the entry is created, so wait for it to be up.
+        health = local_health_url(norm, env)
+        if not wait_gateway(health):
+            die(f"the Hermes gateway does not answer at {health}; start it (voice_profile.py --profile "
+                f"{a.profile or '<name>'} --service) and run this again")
+        _, f = http("POST", ha + "/api/config/config_entries/flow", token=token, body={"handler": DOMAIN})
+        if not isinstance(f, dict) or "flow_id" not in f:
+            die(f"Home Assistant did not start the hermes_voice setup: {f}")
         status, r = http("POST", f"{ha}/api/config/config_entries/flow/{f['flow_id']}", token=token,
                          body={"base_url": hermes_url, "api_key": api_key, "display_name": name})
         if not isinstance(r, dict) or r.get("type") != "create_entry":
-            errors = r.get("errors") if isinstance(r, dict) else r
-            die(f"config flow failed: {errors} (is the Hermes gateway reachable from HA at {hermes_url}?)")
+            http("DELETE", f"{ha}/api/config/config_entries/flow/{f['flow_id']}", token=token)  # don't leave it open
+            why = (r.get("errors") or r.get("reason")) if isinstance(r, dict) else r
+            hint = {"cannot_connect": f"Home Assistant cannot reach the gateway at {hermes_url}; from HA in Docker "
+                                      "use host.docker.internal or this machine's LAN IP (--hermes-url)",
+                    "invalid_auth": "the gateway rejected API_SERVER_KEY; restart the gateway after changing .env",
+                    "already_configured": "an entry for this URL already exists"}
+            key = next(iter(why.values())) if isinstance(why, dict) and why else why
+            die(f"hermes_voice setup failed: {why}. {hint.get(str(key), '')}".strip())
         entry = r["result"]
 
     # 5. options

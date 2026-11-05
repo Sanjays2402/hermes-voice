@@ -227,6 +227,12 @@ ERROR_CASES = {
     "empty_reply": {"json": reply("")},
     "malformed": {"json": {"unexpected": True}},
     "not_json": {"text": "<html>proxy error</html>"},
+    "provider_auth_text_200": {
+        "json": reply(
+            "Provider authentication failed: No Codex credentials stored. Run hermes -p x auth add openai-codex"
+        )
+    },
+    "provider_rate_text_200": {"json": reply("Provider rate-limited: usage limit reached, resets in 2 h")},
 }
 
 

@@ -79,7 +79,9 @@ class HermesVoiceConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg
                 errors[CONF_BASE_URL] = "invalid_url"
             else:
                 url = normalize_base_url(user_input[CONF_BASE_URL])
-                await self.async_set_unique_id(url)
+                # raise_on_progress=False: an unfinished earlier attempt for the same URL (wrong key,
+                # gateway down) must not block this one; HA aborts it once this entry is created.
+                await self.async_set_unique_id(url, raise_on_progress=False)
                 self._abort_if_unique_id_configured()
                 errors, models = await self._try(url, user_input[CONF_API_KEY])
                 if not errors:

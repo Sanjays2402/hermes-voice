@@ -180,6 +180,10 @@ STREAM_ERRORS = {
     "length_without_text": stream(chunk(finish="length")),
     "no_text": stream(chunk(finish="stop")),
     "tool_then_nothing": stream(tool("c1", "running"), tool("c1", "completed"), chunk(finish="stop")),
+    "provider_auth_text": stream(
+        chunk("Provider authentication failed: No Codex credentials stored. Run hermes auth add boom"),
+        chunk(finish="stop"),
+    ),
 }
 
 

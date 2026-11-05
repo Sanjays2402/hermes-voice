@@ -51,6 +51,20 @@ def normalize_base_url(url: str) -> str:
     return url
 
 
+# Hermes answers a provider login or quota failure with a normal-looking reply that starts with one of
+# these labels (hermes-agent gateway/platforms/api_server.py, PROVIDER_*_LABEL). Never speak it.
+_PROVIDER_AUTH_LABEL = "provider authentication failed"
+_PROVIDER_RATE_LABEL = "provider rate-limited"
+
+
+def _raise_if_provider_failure(text: str) -> None:
+    head = text.lstrip().lower()
+    if head.startswith(_PROVIDER_RATE_LABEL):
+        raise HermesRateLimitError("provider rate-limited")
+    if head.startswith(_PROVIDER_AUTH_LABEL):
+        raise HermesAgentError("provider authentication failed (check the profile's model login)")
+
+
 def _looks_rate_limited(text: str | None) -> bool:
     low = (text or "").lower()
     return any(marker in low for marker in _RATE_LIMIT_MARKERS)
@@ -249,6 +263,8 @@ class HermesClient:
                         )
                     text = delta.get("content") if isinstance(delta, dict) else None
                     if text:
+                        if not got_text:
+                            _raise_if_provider_failure(text)
                         got_text = True
                         yield TextDelta(text)
         except TimeoutError as err:
@@ -311,4 +327,5 @@ class HermesClient:
             raise HermesRateLimitError("agent incomplete: rate limited")
         if not text.strip():
             raise HermesAgentError("empty reply")
+        _raise_if_provider_failure(text)
         return HermesReply(text=text, session_id=returned_sid)

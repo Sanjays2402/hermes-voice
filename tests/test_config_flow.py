@@ -184,3 +184,23 @@ async def test_reauth(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) 
     assert r["type"] is FlowResultType.ABORT
     assert r["reason"] == "reauth_successful"
     assert entry.data[CONF_API_KEY] == "new-key-0123456789"
+
+
+async def test_unfinished_flow_does_not_block(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A first attempt left open after an error (wrong key) does not block a new attempt for the same URL."""
+    aioclient_mock.get(f"{BASE}/models", status=401)
+    first = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    r = await hass.config_entries.flow.async_configure(
+        first["flow_id"], {CONF_BASE_URL: BASE, CONF_API_KEY: "wrong"}
+    )
+    assert r["errors"] == {"base": "invalid_auth"}
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(f"{BASE}/models", json=MODELS)
+    second = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    r = await hass.config_entries.flow.async_configure(
+        second["flow_id"], {CONF_BASE_URL: BASE, CONF_API_KEY: KEY}
+    )
+    assert r["type"] is FlowResultType.CREATE_ENTRY
+    assert not hass.config_entries.flow.async_progress()  # the unfinished one was aborted

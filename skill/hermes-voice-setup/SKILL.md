@@ -36,6 +36,19 @@ with `--profile` and refuse `default`.
 | Text test through HA | `python3 ${HERMES_SKILL_DIR}/scripts/verify.py --recall` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
 
+## Ground rules
+
+- **Use the scripts.** If one fails, read its error, fix the cause (for example start the gateway) and run it
+  again. Do not replace a step with your own API calls or helper scripts; if you cannot fix it, stop and tell
+  the user what failed.
+- **Profiles stay where Hermes keeps them** (`hermes profile create`). Never move or symlink a profile, set
+  `HERMES_HOME`, or copy `auth.json` or other credentials. A new profile already shares the Hermes install's
+  provider login. When the user wants files in a particular folder, that means `--config-dir`, `--data-dir`
+  and `--secrets-dir`.
+- **Leave existing things alone** unless the user chose them: other Hermes profiles, a Home Assistant that is
+  already running, other containers. If the profile name the user wants already exists, ask before changing it.
+- Show a `--dry-run` before each step that changes something, and say what it will change.
+
 ## Procedure
 
 1. **Pick the voice profile.** Ask the user which profile should be the voice. Recommend a new
