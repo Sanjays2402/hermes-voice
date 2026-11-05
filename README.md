@@ -59,9 +59,9 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
    questions (which profile, what the voice assistant may do, whether you already run Home Assistant),
    shows a `--dry-run` of each step, and then runs:
    ```bash
-   voice_profile.py --profile voice --create --write-soul --tools safe --reasoning low --start
+   voice_profile.py --profile voice --create --write-soul --tools safe --reasoning low --service
    ha_setup.py --profile voice --docker --config-dir ~/hermes-voice/ha-config --set-default
-   speech_setup.py --docker --data-dir ~/hermes-voice/speech --set-default --internal-url http://<LAN-IP>:8123
+   speech_setup.py --docker --data-dir ~/hermes-voice/speech --set-default --internal-url http://<LAN-IP>:8123 --piper-voice en_US-ryan-high
    verify.py --recall
    ```
    `--tools` decides what Hermes may do when spoken to: `safe` (web search, memory), `home` (+ Home Assistant

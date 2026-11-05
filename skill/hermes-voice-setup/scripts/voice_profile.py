@@ -8,6 +8,7 @@ set. Every file is backed up before it is changed.
 Examples:
   voice_profile.py --profile voice --create --dry-run
   voice_profile.py --profile voice --create --write-soul --start
+  voice_profile.py --profile voice --service          # keep it running across restarts (login service)
   voice_profile.py --profile voice --start            # adopt an existing profile
   voice_profile.py --profile voice --tools safe       # web search only (default for new setups)
   voice_profile.py --profile voice --tools full       # code by voice: terminal, files, git, ...
@@ -31,6 +32,7 @@ from _common import read_text, act, die, http, read_env_file, say, set_dry_run  
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOUL_TEMPLATE = os.path.join(SKILL_DIR, "references", "SOUL.voice.md")
+HERMES_DEFAULT_SOUL_START = "You are Hermes Agent, built by Nous Research."
 
 # What the voice assistant may do. Voice requests reach Hermes through its api_server platform,
 # so these apply to that platform only; the profile's CLI and other platforms are left alone.
@@ -124,7 +126,10 @@ def main() -> None:
     p.add_argument("--reasoning", help="model thinking effort for this profile (agent.reasoning_effort), e.g. "
                    "low, medium, high. Lower answers sooner; 'low' is recommended for voice. Omit to leave as is")
     p.add_argument("--tools-platform", default="api_server", help="Hermes platform the voice requests use")
-    p.add_argument("--start", action="store_true", help="start the standalone gateway if it is not running")
+    p.add_argument("--start", action="store_true", help="start the standalone gateway if it is not running "
+                   "(until logout or restart; see --service)")
+    p.add_argument("--service", action="store_true", help="install the standalone gateway as a login service "
+                   "(launchd/systemd via `hermes gateway install`): starts now, at login and after a crash")
     p.add_argument("--hermes-root", default=os.path.expanduser("~/.hermes"))
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
@@ -139,6 +144,7 @@ def main() -> None:
     backup_dir = os.path.join(pdir, "hermes-voice-backups", time.strftime("%Y%m%d-%H%M%S"))
 
     # 1. profile
+    created = False
     if not os.path.isdir(pdir):
         if not a.create:
             die(f"profile '{name}' does not exist; pass --create")
@@ -149,6 +155,7 @@ def main() -> None:
             cmd += ["--clone-from", a.clone_from]
         if act(f"run: hermes {' '.join(cmd)}"):
             hermes(*cmd)
+        created = True
     else:
         say(f"profile '{name}' exists ({pdir})")
     exists = os.path.isdir(pdir)
@@ -157,8 +164,10 @@ def main() -> None:
     soul = os.path.join(pdir, "SOUL.md")
     template = read_text(SOUL_TEMPLATE)
     current_soul = read_text(soul) if os.path.exists(soul) else ""
+    # `hermes profile create` writes its own generic SOUL.md; that one is not "custom content".
+    hermes_default = created or current_soul.startswith(HERMES_DEFAULT_SOUL_START)
     if a.write_soul and current_soul != template:
-        if current_soul and not a.force_soul:
+        if current_soul and not hermes_default and not a.force_soul:
             say("SOUL.md already has custom content; keeping it (use --force-soul to replace)")
         elif act(f"write voice SOUL.md template to {soul}"):
             backup(soul, backup_dir)
@@ -217,6 +226,9 @@ def main() -> None:
                         hermes("-p", name, "tools", "disable", "--platform", a.tools_platform, *disable)
             else:
                 say(f"voice tools already: {', '.join(sorted(wanted))}")
+        else:
+            changed_cfg.append(f"platform_toolsets.{a.tools_platform}")
+            act(f"voice tools for '{name}': only {', '.join(wanted)} (all other toolsets disabled for voice)")
         voice_tools = sorted(wanted)
 
     # 4c. thinking effort
@@ -244,7 +256,23 @@ def main() -> None:
     if running and (changed_env or changed_cfg) and not a.dry_run:
         say("note: gateway is running; restart it for the changes to apply "
             f"(hermes -p {name} gateway stop && hermes -p {name} gateway start)")
-    if a.start and not running and not a.multiplexed:
+    if a.service and not a.multiplexed:
+        installed_service = "supervised by" in own_status or "Service definition matches" in own_status
+        if installed_service:
+            say(f"gateway service for '{name}' already installed")
+        elif act(f"install login service: hermes -p {name} gateway install --start-now --start-on-login"):
+            if running:  # a hand-started gateway holds the port; the service replaces it
+                hermes("-p", name, "gateway", "stop", check=False)
+                running = False
+            hermes("-p", name, "gateway", "install", "--start-now", "--start-on-login")
+            for _ in range(60):
+                time.sleep(1)
+                if http("GET", health_url, timeout=2)[0] == 200:
+                    running = True
+                    break
+            if not running:
+                die(f"gateway service did not come up; see `hermes -p {name} gateway status`")
+    if a.start and not a.service and not running and not a.multiplexed:
         log = os.path.join(pdir, "logs", "hermes-voice-gateway.log")
         if act(f"start: hermes -p {name} gateway run (log {log})"):
             os.makedirs(os.path.dirname(log), exist_ok=True)

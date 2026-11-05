@@ -29,7 +29,7 @@ with `--profile` and refuse `default`.
 | Step | Command |
 |---|---|
 | Plan profile changes | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --create --dry-run` |
-| Prepare + start profile | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --create --write-soul --tools safe --reasoning low --start` |
+| Prepare + start profile | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --create --write-soul --tools safe --reasoning low --service` |
 | Change what voice may do | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --tools safe\|home\|full\|web,file,...` |
 | Plan HA changes | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --dry-run` |
 | Install + configure HA | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --set-default` |
@@ -42,10 +42,14 @@ with `--profile` and refuse `default`.
    dedicated one (default name `voice`) over their main agent. Explain why: voice turns are short, it should
    not share the main agent's rate limit, and its tools/MCP servers should be ones they are happy to run
    from a spoken command. Always run with `--dry-run` first and show the user the planned changes.
-   - New profile: `voice_profile.py --profile voice --create [--clone-from <main>] --write-soul --start`.
+   - New profile: `voice_profile.py --profile voice --create [--clone-from <main>] --write-soul --service`.
+     `--service` installs the gateway as a login service so it survives restarts (`--start` runs it only
+     until logout). `--write-soul` installs the voice persona "Hermes" (replacing the generic SOUL.md
+     `hermes profile create` writes; a SOUL.md the user wrote is kept unless `--force-soul`).
      `--clone-from` copies that profile's config, provider login, `.env`, SOUL.md, skills, memory and
-     MCP servers. Without it the new profile needs its own provider (`hermes -p voice setup`).
-   - Existing profile: `voice_profile.py --profile <name> --start` (adds the API server key/port, marks it
+     MCP servers. Without it the new profile uses the provider login shared by the Hermes install (root
+     `auth.json`, so it shares that rate limit); give it its own with `hermes -p voice setup`.
+   - Existing profile: `voice_profile.py --profile <name> --service` (adds the API server key/port, marks it
      standalone, disables `session_search`; backs up every file it edits under
      `profiles/<name>/hermes-voice-backups/`).
    - Already served by a multiplexing host gateway: add `--multiplexed`; the URL becomes
@@ -66,6 +70,10 @@ with `--profile` and refuse `default`.
      `ghcr.io/home-assistant/home-assistant:stable`, onboards it, stores the admin password and a token in
      `~/.config/hermes-voice/secrets/` (0600), installs and configures `hermes_voice`.
    - `--set-default` makes the profile the conversation agent of the preferred Assist pipeline.
+   - **Ask which voice** they want for replies and pass `speech_setup.py --piper-voice`, e.g.
+     `en_US-lessac-medium` (female, default) or `en_US-ryan-high` (male); others:
+     https://rhasspy.github.io/piper-samples/. To change it later, set the voice on the Assist pipeline
+     (Settings → Voice assistants).
    - Speech: if the pipeline has no speech-to-text / text-to-speech yet, run
      `speech_setup.py --docker --data-dir DIR --set-default --internal-url http://<LAN-IP>:8123`. It runs
      Wyoming Whisper (Parakeet model for English) and Piper in Docker on 127.0.0.1, adds them to HA and sets
