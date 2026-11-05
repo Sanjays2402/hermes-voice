@@ -2,13 +2,11 @@
 
 The intended GitHub repository is `majorminorlabs/hermes-voice`.
 
-## 1. Resolve the wake word model's distribution rights
+## 1. Label the code and wake word model
 
-The `hey_hermes.tflite` model was trained with mixed-license data. The upstream
-[negative features dataset](https://huggingface.co/datasets/kahrendt/microwakeword) is CC BY-NC 4.0,
-and the training notebook describes its result as suitable for non-commercial personal use.
-Before pushing publicly, confirm that the model can be redistributed or exclude both copies of
-the weights from the published history and release files. See [Credits](CREDITS.md).
+The code is [MIT-licensed](LICENSE). The bundled `hey_hermes.tflite` model is for non-commercial
+use only. Keep [MODEL_NOTICE.md](wakeword/model/MODEL_NOTICE.md) alongside the model in the
+wake word and skill release archives.
 
 ## 2. Check before pushing
 

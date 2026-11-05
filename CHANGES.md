@@ -27,6 +27,7 @@ First version.
 - Docs: architecture, voice profile setup, troubleshooting; Echo (echo-dot-assist) device guide.
 - `wakeword/`: pinned, resumable microWakeWord pipeline for "hey hermes", and a trained model
   (`wakeword/model/hey_hermes.tflite` + `.json`; 5.3 % false rejects / 0 false accepts per hour on synthetic test data;
-  in use on an Echo Dot 2nd gen).
+  tested on a second-generation Echo Dot running echo-dot-assist). The bundled model is for
+  non-commercial use only.
 - Release files built from the committed tree by `tools/build_release.sh`: integration zip, skill zip,
   wake word zip, SHA256SUMS.

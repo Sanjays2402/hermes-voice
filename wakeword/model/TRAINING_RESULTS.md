@@ -30,5 +30,6 @@ positives per hour on the ambient validation set.
   samples makes a model look better than it is with real voices. Expect a higher false reject rate with
   real speakers; lower the cutoff on the device if it misses too often.
 - `tensor_arena_size` 30000 is an estimate (same architecture as upstream hey_jarvis, which uses 22860).
-- Not tested on any device: neither on echo-dot-assist nor on an ESPHome device.
-- Training data has mixed licenses; upstream says models trained with it are for non-commercial personal use.
+- The model was tested on a second-generation Echo Dot running echo-dot-assist. The table above
+  reports the offline evaluation. ESPHome hardware remains untested.
+- The model is for [non-commercial use only](MODEL_NOTICE.md).

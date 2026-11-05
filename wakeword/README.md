@@ -56,12 +56,12 @@ from "hey hermes" plus two phonetic spellings instead of 1000.
 
 - **echo-dot-assist** accepts a microWakeWord `.tflite` with its `.json` manifest (marked experimental there):
   https://github.com/Gamer92000/echo-dot-assist/blob/main/docs/GUIDE.md#wake-word.
-  Loading this model on an Echo has **not been tested** by this project.
+  This model was tested on a second-generation Echo Dot running echo-dot-assist.
 - ESPHome devices: `micro_wake_word: models: - model: <url or path to hey_hermes.json>`. Not tested here.
 - `probability_cutoff` in the manifest comes from the test results at the end of training (see
   `model/TRAINING_RESULTS.md` if present); tune it on the device if it triggers too often or too rarely.
 
-## License of the result
+## License
 
-The training data has mixed licenses. microWakeWord's notebook says models trained with this data
-"should be considered as appropriate for non-commercial personal use only". The pipeline code here is MIT.
+The pipeline code is [MIT-licensed](../LICENSE). The trained model is for
+[non-commercial use only](model/MODEL_NOTICE.md).

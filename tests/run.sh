@@ -8,7 +8,8 @@ IMAGE="hermes-voice-test:2026.10.4"
 ASSETS="$ROOT/skill/hermes-voice-setup/assets"
 if ! diff -rq -x __pycache__ "$ROOT/custom_components/hermes_voice" "$ASSETS/hermes_voice" >/dev/null ||
    ! cmp -s "$ROOT/wakeword/model/hey_hermes.tflite" "$ASSETS/wakeword/hey_hermes.tflite" ||
-   ! cmp -s "$ROOT/wakeword/model/hey_hermes.json" "$ASSETS/wakeword/hey_hermes.json"; then
+   ! cmp -s "$ROOT/wakeword/model/hey_hermes.json" "$ASSETS/wakeword/hey_hermes.json" ||
+   ! cmp -s "$ROOT/wakeword/model/MODEL_NOTICE.md" "$ASSETS/wakeword/MODEL_NOTICE.md"; then
   echo "skill assets are out of date: run tools/sync_skill_assets.sh" >&2
   exit 1
 fi

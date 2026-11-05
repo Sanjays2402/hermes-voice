@@ -18,6 +18,9 @@ a voice device goes: device → HA Assist (speech-to-text) → `hermes_voice` �
 All scripts are stdlib Python, idempotent, and support `--dry-run`. They only touch the profile named
 with `--profile` and refuse `default`.
 
+The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model is for
+[non-commercial use only](assets/wakeword/MODEL_NOTICE.md).
+
 ## When to Use
 
 - The user wants to talk to their Hermes agent by voice, through Home Assistant.

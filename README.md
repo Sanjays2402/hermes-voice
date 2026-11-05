@@ -127,4 +127,5 @@ Docs: [architecture](docs/architecture.md) · [voice profile](docs/voice-profile
 
 ## License
 
-MIT for the code in this repository ([LICENSE](LICENSE)). Third-party projects keep their own licenses.
+The code is [MIT-licensed](LICENSE). The bundled `hey_hermes.tflite` wake word model is for
+[non-commercial use only](wakeword/model/MODEL_NOTICE.md).
