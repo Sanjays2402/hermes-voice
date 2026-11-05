@@ -99,6 +99,13 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 3. **Device.** Read `references/devices.md` and walk the user through the Echo path (echo-dot-assist).
    echo-dot-assist unlocks the bootloader and writes the system partition to replace the Alexa client
    while keeping Fire OS. The install can brick the device. Link to its guide for the user to run.
+   For a Dot 2 on Windows, also read the recovery section in `references/devices.md`. The tested unit
+   needed a hardware short after firebreak 0.8.0 stalled. Stop a waiting installer before manual recovery.
+   Allow a write already in progress to finish.
+   Check the firmware build selected by the exact firebreak version. A rooted-system or “both slots”
+   message does not verify a fallback, and the satellite may be installed only in the active slot.
+   Obtain explicit approval before enabling debug access or changing firmware, slots or boot state.
+   Debug access needs its own action-button press after the settings-page login approval.
    Then offer the "Hey Hermes" wake word: the model is in `${HERMES_SKILL_DIR}/assets/wakeword/`. The user
    uploads both files on the Echo's settings page (`http://<echo-ip>:28931/`, approval by the Echo's action
    button; steps in `references/devices.md`), then you set the Echo's `select.<echo>_wake_word` entity to

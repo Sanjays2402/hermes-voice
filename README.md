@@ -100,6 +100,11 @@ Requires Home Assistant 2026.10 or newer (the version tested).
 | Echo Dot 3rd gen (2018), Echo 2nd gen via echo-dot-assist | Supported by echo-dot-assist; not tested by this project. |
 | Other Home Assistant Assist satellites (e.g. Voice PE) | Should work, since the satellite only needs a pipeline whose conversation agent is hermes_voice. Untested. |
 
+The tested Echo Dot 2 required a hardware short after the unlock stalled. The device guide records
+the Windows driver issue, recovery point, firmware mismatch and subsequent slot inspection.
+It also explains why matching firmware in both slots does not establish a working fallback.
+Read the [Echo Dot 2 recovery notes](devices/echo/README.md#echo-dot-2-recovery-on-windows) before recovering a stalled unlock.
+
 ## Known limits
 
 - **Latency**: about 3.5 s per plain turn in testing, almost all of it the model; Home Assistant adds about

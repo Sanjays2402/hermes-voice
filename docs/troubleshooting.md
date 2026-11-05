@@ -2,6 +2,13 @@
 
 Issues hit while building and testing v0.1, and what fixed them.
 
+## Echo Dot 2 unlock stalls or the boot gesture stops working
+
+The tested Windows unlock stalled with firebreak 0.8.0 and required a hardware short.
+Read the [Echo Dot 2 recovery notes](../devices/echo/README.md#echo-dot-2-recovery-on-windows)
+for the driver failure, tested short point and firmware/slot findings. Stop a waiting installer
+before running another one. A rooted-system message does not verify both slots or a fallback.
+
 ## The assistant says "I can't reach my brain right now"
 
 That is hermes_voice's fallback. The HA log has the reason (`Hermes turn failed (<kind>, session <id>)`).

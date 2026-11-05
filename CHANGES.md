@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Document the tested Echo Dot 2 Windows recovery, including the MediaTek driver block,
+  hardware short, firebreak firmware defaults and possible interference between installers.
+- Record the read-only A/B findings and the separate action-button approval for temporary debug access.
+
 ## 0.1.0 — 2026-11-04
 
 First version.
