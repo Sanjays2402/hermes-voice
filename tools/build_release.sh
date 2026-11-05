@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build the release files from the committed tree (git archive), so a release holds exactly what is in git.
-#   dist/hermes_voice-<v>.zip          Home Assistant integration: unzip into <config>/custom_components/
-#   dist/hermes-voice-setup-<v>.zip    Hermes skill (scripts, integration and wake word model included)
-#   dist/hey_hermes-wakeword-<v>.zip   "Hey Hermes" microWakeWord model for echo-dot-assist
-#   dist/SHA256SUMS
+#   tools/build_release.sh [OUT_DIR]     (default: dist/ in the repo, which git ignores)
+#   hermes_voice-<v>.zip          Home Assistant integration: unzip into <config>/custom_components/
+#   hermes-voice-setup-<v>.zip    Hermes skill (scripts, integration and wake word model included)
+#   hey_hermes-wakeword-<v>.zip   "Hey Hermes" microWakeWord model for echo-dot-assist
+#   SHA256SUMS
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -30,8 +31,8 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 git archive HEAD | tar -x -C "$TMP"
-rm -rf dist && mkdir dist
-DIST="$ROOT/dist"
+DIST="$(mkdir -p "${1:-$ROOT/dist}" && cd "${1:-$ROOT/dist}" && pwd)"
+rm -f "$DIST"/hermes_voice-*.zip "$DIST"/hermes-voice-setup-*.zip "$DIST"/hey_hermes-wakeword-*.zip "$DIST/SHA256SUMS"
 (cd "$TMP/custom_components" && zip -qrX "$DIST/hermes_voice-$V.zip" hermes_voice)
 (cd "$TMP/skill" && zip -qrX "$DIST/hermes-voice-setup-$V.zip" hermes-voice-setup)
 (cd "$TMP/wakeword/model" && zip -qrX "$DIST/hey_hermes-wakeword-$V.zip" hey_hermes.tflite hey_hermes.json TRAINING_RESULTS.md)
