@@ -2,10 +2,66 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hermes screen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Hermes</title>
+<link rel="stylesheet" href="style.css">
 </head>
-<body>
-<p>Hermes screen: placeholder. The page comes in step 2 of docs/show-screen.md.</p>
+<body data-mode="offline">
+<main id="live" class="screen">
+  <div class="stage">
+    <div class="avatar-wrap" id="avatar-wrap" aria-hidden="true">
+      <div class="halo"></div>
+      <div class="ring"></div>
+      <div class="avatar" id="avatar"></div>
+    </div>
+    <div class="content">
+      <div class="status-line"><span class="dot"></span><span id="status">Connecting</span></div>
+
+      <div class="pane idle-pane" id="idle">
+        <div class="clock" id="clock">--:--</div>
+        <div class="date" id="date"></div>
+        <div class="context" id="context"></div>
+      </div>
+
+      <div class="pane turn-pane" id="turn">
+        <div class="heard" id="heard"></div>
+        <div class="tools" id="tools"></div>
+        <div class="reply" id="reply"></div>
+      </div>
+    </div>
+  </div>
+  <div class="corner-clock" id="corner-clock"></div>
+</main>
+
+<section id="overview" class="screen overview" hidden>
+  <header class="ov-head">
+    <button class="back" id="ov-back" aria-label="Back">‹</button>
+    <h1>Hermes</h1>
+    <span class="ov-profile" id="ov-profile"></span>
+    <span class="ov-updated" id="ov-updated"></span>
+  </header>
+  <div class="ov-cols">
+    <section class="ov-col">
+      <h2>Scheduled</h2>
+      <ul id="ov-jobs" class="ov-list"></ul>
+    </section>
+    <section class="ov-col">
+      <h2>Recent</h2>
+      <ul id="ov-sessions" class="ov-list"></ul>
+    </section>
+    <section class="ov-col ov-status">
+      <h2>Status</h2>
+      <dl id="ov-status"></dl>
+    </section>
+  </div>
+</section>
+
+<div class="setup" id="setup" hidden>
+  <h1>Hermes screen</h1>
+  <p id="setup-text"></p>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>

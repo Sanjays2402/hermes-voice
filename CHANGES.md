@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hermes screen page (`docs/show-screen.md`, step 2) at `/hermes_voice/screen`: idle (clock, next job or
+  last question), listening, thinking (question, tool activity), answering (the reply as it is written,
+  links and lists included), Home Assistant's own answers, and a tap-for overview (jobs, recent
+  conversations, status). Nous Girl from Hermes Agent as the default avatar (MIT, notice included),
+  replaceable from `<config>/www/hermes_voice/`. Works with a non-admin Home Assistant user. `?demo` mode.
 - Live feed for a Hermes screen (`docs/show-screen.md`, step 1): websocket commands
   `hermes_voice/screen/subscribe` (the Echo's state, what was heard, Hermes' reply as it is written, its
   tools, and answers Home Assistant gave itself) and `hermes_voice/screen/overview` (Hermes' jobs, recent

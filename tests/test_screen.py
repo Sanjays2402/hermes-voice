@@ -219,6 +219,10 @@ async def test_screen_page_served(
     """The screen page is served by Home Assistant."""
     await _setup(hass, aioclient_mock)
     client = await hass_client()
-    resp = await client.get("/hermes_voice/screen/index.html")
+    resp = await client.get("/hermes_voice/screen?device=abc")
     assert resp.status == 200
-    assert "Hermes screen" in await resp.text()
+    assert str(resp.url).endswith("/hermes_voice/screen/index.html?device=abc")
+    page = await resp.text()
+    assert "app.js" in page and "Hermes screen" in page
+    for asset in ("app.js", "style.css", "avatar-default.svg"):
+        assert (await client.get(f"/hermes_voice/screen/{asset}")).status == 200

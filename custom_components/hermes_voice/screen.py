@@ -15,11 +15,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, ClassVar
 
+from aiohttp import web
 from homeassistant.components import websocket_api
 from homeassistant.components.conversation.chat_log import async_subscribe_chat_logs
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
@@ -240,6 +241,19 @@ class ScreenHub:
         return out
 
 
+class ScreenRedirectView(HomeAssistantView):
+    """``/hermes_voice/screen`` opens the page (a folder URL alone is not served)."""
+
+    url = SCREEN_URL
+    extra_urls: ClassVar[list[str]] = [SCREEN_URL + "/"]
+    name = "hermes_voice:screen"
+    requires_auth = False  # the page logs in to the websocket itself
+
+    async def get(self, request: web.Request) -> web.Response:
+        query = f"?{request.query_string}" if request.query_string else ""
+        raise web.HTTPFound(f"{SCREEN_URL}/index.html{query}")
+
+
 def _pick(data: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {k: data[k] for k in keys if k in data}
 
@@ -268,6 +282,7 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_overview)
     if SCREEN_DIR.is_dir() and getattr(hass, "http", None) is not None:
+        hass.http.register_view(ScreenRedirectView())
         await hass.http.async_register_static_paths([StaticPathConfig(SCREEN_URL, str(SCREEN_DIR), False)])
 
 

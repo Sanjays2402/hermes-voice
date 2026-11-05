@@ -1,6 +1,29 @@
 # Hermes screen for the Echo Show (design)
 
-Status: step 1 (the integration's live feed) is built and tested live on an Echo Show 5; steps 2–4 are not built yet. Target: the Echo Show 5 1st gen running echo-dot-assist (hassmic), tested
+Status: steps 1 (the integration's live feed) and 2 (the page) are built and tested live with an Echo Show 5,
+the page in a desktop browser. Steps 3 (the app on the Show) and 4 (memories and background work in the
+overview) are not built yet.
+
+## Using the page
+
+Open `http://<home-assistant>:8123/hermes_voice/screen` in a browser (960×480 is the Show 5's size).
+
+- **Login**: once with `#token=<long-lived token>` in the address; the page keeps it in that browser and
+  removes it from the address. Without one it uses Home Assistant's own login in that browser. Use a
+  **non-admin** Home Assistant user for a screen: the page needs nothing more.
+- **Which Echo**: `?device=<device id>` follows one voice device (the id is in the device page's address in
+  Home Assistant). Without it, the page follows whichever device spoke last.
+- `?hold=<seconds>`: how long an answer stays up after the Echo goes quiet (default 60).
+- `?demo` plays a scripted conversation without Home Assistant; `?demo=idle` stays on the idle screen.
+- **Avatar**: put `avatar.svg` / `avatar.png` (or `.webp`, `.jpg`, `.gif`) in `<config>/www/hermes_voice/`
+  to replace the default; `avatar-listening.*`, `avatar-thinking.*`, `avatar-answering.*` replace it in
+  that state (Home Assistant serves `www/` only if the folder existed when it started). Or `?avatar=<url>`.
+  The default is shown as a tinted mask; your own pictures are shown as they are.
+- Tap the idle screen for the overview; it closes by itself after 90 seconds or when the Echo hears you.
+
+Tested on 2026-11-05: "What is the weather like in Pensacola, Florida?" on the Echo Show 5 showed
+Listening, Thinking with the question, *Searching the web* and *Reading a page* (forecast.weather.gov) with
+ticks, then the answer streaming in, about 17 seconds from wake word to answer. Target: the Echo Show 5 1st gen running echo-dot-assist (hassmic), tested
 with Hermes Voice on 2026-11-05. The same page should work on other Shows and in a desktop browser.
 
 ## Goal

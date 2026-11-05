@@ -1,0 +1,586 @@
+/* Hermes screen (docs/show-screen.md).
+ *
+ * Talks to Home Assistant over its websocket and the two commands hermes_voice adds:
+ *   hermes_voice/screen/subscribe   the Echo's state, what was heard, Hermes' reply as it is written, its tools
+ *   hermes_voice/screen/overview    scheduled jobs, recent sessions, gateway status
+ *
+ * URL options:
+ *   ?device=<device id>   follow one voice device (default: every device, the one that spoke last)
+ *   #token=<token>        a Home Assistant long-lived token; kept in this browser, then removed from the URL.
+ *                         Without one, the login of Home Assistant's own frontend in this browser is used.
+ *   ?hold=<seconds>       how long an answer stays up after the Echo goes idle (default 60)
+ *   ?avatar=<url>         a picture to use instead of the default avatar
+ *   ?demo                 play a scripted conversation, no Home Assistant needed (?demo=idle: stay idle)
+ */
+(() => {
+  "use strict";
+
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has("demo");
+  let holdMs = Math.max(5, Number(params.get("hold")) || 60) * 1000; // the demo shortens it
+  const STORE = "hermesScreen.";
+  const $ = (id) => document.getElementById(id);
+  const body = document.body;
+
+  // ---------------------------------------------------------------------------------- storage --
+  const store = {
+    get(key) { try { return localStorage.getItem(STORE + key); } catch { return null; } },
+    set(key, value) { try { localStorage.setItem(STORE + key, value); } catch { /* private mode */ } },
+  };
+
+  // ------------------------------------------------------------------------------------- state --
+  let connected = false;
+  const state = {
+    device: params.get("device") || store.get("device") || null, // null: every device
+    focus: null, // the device shown when following every device
+    satellite: {}, // device id -> idle | listening | processing | responding | unavailable
+    turn: emptyTurn(),
+    mode: "offline",
+    holdUntil: 0,
+    tz: undefined,
+    locale: undefined,
+    overview: null,
+    overviewAt: 0,
+  };
+
+  function emptyTurn() {
+    return { heard: "", reply: "", tools: [], phase: "idle", by: "hermes", at: 0, error: "" };
+  }
+
+  // -------------------------------------------------------------------------------- rendering --
+  const STATUS = {
+    offline: "Offline",
+    idle: "Hermes",
+    listening: "Listening",
+    thinking: "Thinking",
+    answering: "Answering",
+    done: "Hermes",
+    error: "Something went wrong",
+  };
+
+  function setMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    body.dataset.mode = mode;
+    $("status").textContent =
+      ["answering", "done"].includes(mode) && state.turn.by === "home_assistant" ? "Home Assistant" : STATUS[mode];
+    if (mode !== "idle" && mode !== "offline") closeOverview();
+    renderTurn();
+  }
+
+  /** Decide what to show from the Echo's state and the current turn. */
+  function updateMode() {
+    if (!connected && !DEMO) return setMode("offline");
+    const sat = state.satellite[state.device || state.focus] || "idle";
+    const t = state.turn;
+    if (sat === "listening") return setMode("listening");
+    if (sat === "processing") return setMode(t.reply ? "answering" : t.phase === "error" ? "error" : "thinking");
+    if (sat === "responding") return setMode(t.phase === "error" ? "error" : "answering");
+    // idle, unavailable, or a typed turn with no voice device
+    if (t.phase === "thinking") return setMode("thinking");
+    if (t.phase === "answering") return setMode("answering");
+    if (t.phase === "error" && Date.now() < state.holdUntil) return setMode("error");
+    if (t.phase === "done" && Date.now() < state.holdUntil) return setMode("done");
+    setMode("idle");
+  }
+
+  const TOOL_NAMES = {
+    web_search: "Searching the web",
+    web_extract: "Reading a page",
+    browser: "Browsing",
+    session_search: "Searching past conversations",
+    memory: "Checking memory",
+    memory_search: "Checking memory",
+    terminal: "Running a command",
+    execute_code: "Running code",
+    read_file: "Reading a file",
+    write_file: "Writing a file",
+    patch: "Editing a file",
+    search_files: "Searching files",
+    vision_analyze: "Looking at an image",
+    image_generate: "Making an image",
+    homeassistant: "Talking to Home Assistant",
+    cronjob: "Scheduling",
+    delegate_task: "Handing off a task",
+    todo: "Updating the plan",
+  };
+
+  function toolText(tool) {
+    const name = TOOL_NAMES[tool.tool] || "Using " + String(tool.tool || "a tool").replace(/_/g, " ");
+    return name + (tool.done ? "" : "…");
+  }
+
+  /** A web address shows as its site; anything else is cut to a chip's length. */
+  function shortLabel(text) {
+    const url = text.match(/^https?:\/\/([^/\s]+)/);
+    if (url) return url[1].replace(/^www\./, "");
+    return text.length > 48 ? text.slice(0, 47) + "\u2026" : text;
+  }
+
+  function renderTurn() {
+    const t = state.turn;
+    body.dataset.by = t.by;
+    $("heard").textContent = state.mode === "listening" ? "" : t.heard;
+    const tools = $("tools");
+    tools.replaceChildren(
+      ...t.tools.slice(-4).map((tool) => {
+        const el = document.createElement("span");
+        el.className = "tool" + (tool.done ? " done" : "");
+        const spin = document.createElement("i");
+        spin.className = "spin";
+        const label = document.createElement("small");
+        label.textContent = shortLabel(tool.label || "");
+        el.append(spin, toolText(tool), label);
+        return el;
+      }),
+    );
+    const reply = $("reply");
+    if (state.mode === "error") {
+      reply.innerHTML = '<p class="error-text">Hermes could not answer this time.</p>';
+    } else if (state.mode === "listening" || state.mode === "thinking") {
+      reply.innerHTML = "";
+    } else {
+      reply.innerHTML = (t.by === "home_assistant" ? '<div class="by-ha">Home Assistant</div>' : "") + markdown(t.reply);
+    }
+    fitReply();
+  }
+
+  /** Largest font that fits; while it is written, keep the newest words in view. */
+  function fitReply() {
+    const reply = $("reply");
+    if (!reply.textContent.trim()) return;
+    let size = 40;
+    reply.style.fontSize = size + "px";
+    while (reply.scrollHeight > reply.clientHeight + 1 && size > 24) {
+      size -= 2;
+      reply.style.fontSize = size + "px";
+    }
+    reply.scrollTop = reply.scrollHeight;
+  }
+
+  // A little markdown: Hermes writes for chat, the screen shows what speech left out.
+  function markdown(text) {
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
+    const inline = (s) =>
+      esc(s)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+        .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>")
+        .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, t, u) => `<span class="link">${t}<small>${esc(host(u))}</small></span>`)
+        .replace(/(^|[\s(])(https?:\/\/[^\s)<]+)/g, (_, pre, u) => `${pre}<span class="link">${esc(host(u))}</span>`);
+    const out = [];
+    let list = null;
+    for (const raw of String(text || "").split(/\n/)) {
+      const line = raw.trim();
+      const item = line.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+      if (item) {
+        const kind = /^\d/.test(line) ? "ol" : "ul";
+        if (!list || list.kind !== kind) { list = { kind, items: [] }; out.push(list); }
+        list.items.push(inline(item[1]));
+        continue;
+      }
+      list = null;
+      if (!line) continue;
+      const heading = line.replace(/^#{1,6}\s+/, "");
+      out.push(heading !== line ? `<p><b>${inline(heading)}</b></p>` : `<p>${inline(line)}</p>`);
+    }
+    return out.map((b) => (typeof b === "string" ? b : `<${b.kind}>${b.items.map((i) => `<li>${i}</li>`).join("")}</${b.kind}>`)).join("");
+  }
+
+  // ------------------------------------------------------------------------------ clock, idle --
+  function timeParts(date) {
+    const opts = { hour: "numeric", minute: "2-digit" };
+    if (state.tz) opts.timeZone = state.tz;
+    const parts = new Intl.DateTimeFormat(state.locale, opts).formatToParts(date);
+    const ampm = parts.find((p) => p.type === "dayPeriod");
+    const time = parts.filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim();
+    return { time, ampm: ampm ? ampm.value : "" };
+  }
+
+  function relTime(when) {
+    const t = typeof when === "number" ? when * (when < 1e12 ? 1000 : 1) : Date.parse(when);
+    if (!t) return "";
+    const s = Math.round((t - Date.now()) / 1000);
+    const a = Math.abs(s);
+    const rtf = new Intl.RelativeTimeFormat(state.locale, { numeric: "auto" });
+    if (a < 45) return s > 5 ? "in a moment" : "just now";
+    if (a < 3600) return rtf.format(Math.round(s / 60), "minute");
+    if (a < 86400) return rtf.format(Math.round(s / 3600), "hour");
+    return rtf.format(Math.round(s / 86400), "day");
+  }
+
+  function tick() {
+    const now = new Date();
+    const { time, ampm } = timeParts(now);
+    $("clock").innerHTML = time + (ampm ? `<span class="ampm">${ampm}</span>` : "");
+    $("corner-clock").textContent = time + (ampm ? " " + ampm : "");
+    const dopts = { weekday: "long", month: "long", day: "numeric" };
+    if (state.tz) dopts.timeZone = state.tz;
+    $("date").textContent = new Intl.DateTimeFormat(state.locale, dopts).format(now);
+    $("context").innerHTML = contextLine();
+    if (state.holdUntil && Date.now() >= state.holdUntil) { state.holdUntil = 0; updateMode(); }
+  }
+
+  /** One line on the idle screen: the next scheduled job, else the last thing asked, else a hint. */
+  function contextLine() {
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    const jobs = (state.overview && state.overview.jobs) || [];
+    const next = jobs
+      .filter((j) => j.enabled !== false && j.next_run_at)
+      .sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at))[0];
+    if (next) return `Next: <b>${esc(next.name || "a scheduled job")}</b> ${esc(relTime(next.next_run_at))}`;
+    const t = state.turn;
+    if (t.heard && t.at) return `Last asked ${esc(relTime(t.at))}: <b>${esc(t.heard)}</b>`;
+    if (state.mode === "offline") return "Waiting for Home Assistant…";
+    return "Say <b>“Hey Hermes”</b>";
+  }
+
+  // ---------------------------------------------------------------------------- feed handling --
+  function onEvent(ev) {
+    const dev = ev.device_id === undefined ? null : ev.device_id;
+    if (ev.type === "snapshot") {
+      Object.assign(state.satellite, ev.states || {});
+      const turns = ev.turns || {};
+      const key = state.device || latestDevice(turns);
+      if (turns[key] !== undefined) {
+        const t = turns[key];
+        state.turn = { ...emptyTurn(), ...t, tools: (t.tools || []).map((x) => ({ ...x, done: !x.running })), at: (t.at || 0) * 1000 };
+        state.focus = key;
+        if (t.phase === "done" || t.phase === "error") state.holdUntil = state.turn.at + holdMs;
+      }
+      renderTurn();
+      return updateMode();
+    }
+    if (ev.type === "state") {
+      state.satellite[dev] = ev.state;
+      if (!state.device && ev.state === "listening") state.focus = dev;
+      if (ev.state === "listening" && dev === (state.device || state.focus)) {
+        state.turn = { ...emptyTurn(), phase: "listening", at: Date.now() };
+        renderTurn();
+      }
+      if (ev.state === "idle" && dev === (state.device || state.focus) && ["done", "error"].includes(state.turn.phase)) {
+        state.holdUntil = Date.now() + holdMs;
+      }
+      return updateMode();
+    }
+    if (!state.device) state.focus = dev; // following every device: show the one that is talking
+    const t = state.turn;
+    switch (ev.type) {
+      case "heard":
+        state.turn = { ...emptyTurn(), heard: ev.text || "", phase: "thinking", by: ev.by || "hermes", at: Date.now() };
+        break;
+      case "tool_start":
+        t.tools = t.tools.filter((x) => x.id !== ev.id).concat({ id: ev.id, tool: ev.tool, label: ev.label, done: false });
+        if (t.phase !== "answering") t.phase = "thinking";
+        break;
+      case "tool_end":
+        t.tools = t.tools.map((x) => (x.id === ev.id ? { ...x, done: true } : x));
+        break;
+      case "delta":
+        t.reply += ev.text || "";
+        t.phase = "answering";
+        break;
+      case "reply_done":
+        t.reply = ev.text || t.reply;
+        t.tools = t.tools.map((x) => ({ ...x, done: true }));
+        t.phase = "done";
+        state.holdUntil = Date.now() + holdMs;
+        break;
+      case "local_answer":
+        state.turn = { ...emptyTurn(), heard: ev.heard || "", reply: ev.text || "", phase: "done", by: "home_assistant", at: Date.now() };
+        state.holdUntil = Date.now() + holdMs;
+        break;
+      case "error":
+        t.phase = "error";
+        t.error = ev.message || "";
+        state.holdUntil = Date.now() + holdMs / 2;
+        break;
+      default:
+        return;
+    }
+    renderTurn();
+    updateMode();
+  }
+
+  function latestDevice(turns) {
+    let best = null;
+    let at = -1;
+    for (const [dev, t] of Object.entries(turns)) if ((t.at || 0) > at) { at = t.at || 0; best = dev === "null" ? null : dev; }
+    return best;
+  }
+
+  // ------------------------------------------------------------------------------- connection --
+  let ws = null;
+  let nextId = 1;
+  const pending = new Map();
+  let retry = 0;
+
+  async function token() {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    if (hash.get("token")) {
+      store.set("token", hash.get("token"));
+      if (params.get("device")) store.set("device", params.get("device"));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+    const own = store.get("token");
+    if (own) return own;
+    // The login of Home Assistant's own frontend in this browser, refreshed when it has expired.
+    let ha;
+    try { ha = JSON.parse(localStorage.getItem("hassTokens") || "null"); } catch { ha = null; }
+    if (!ha || !ha.access_token) return null;
+    if (ha.expires && ha.expires > Date.now() + 30000) return ha.access_token;
+    if (!ha.refresh_token) return ha.access_token;
+    const form = new URLSearchParams({ grant_type: "refresh_token", refresh_token: ha.refresh_token, client_id: ha.clientId || location.origin + "/" });
+    const resp = await fetch("/auth/token", { method: "POST", body: form });
+    if (!resp.ok) return null;
+    const fresh = await resp.json();
+    return fresh.access_token;
+  }
+
+  function call(msg) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return reject(new Error("not connected"));
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      ws.send(JSON.stringify({ ...msg, id }));
+    });
+  }
+
+  async function connect() {
+    let tok;
+    try { tok = await token(); } catch { tok = null; }
+    if (!tok) return showSetup();
+    $("setup").hidden = true;
+    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/websocket");
+    let subId = null;
+    ws.onmessage = async (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "auth_required") return ws.send(JSON.stringify({ type: "auth", access_token: tok }));
+      if (msg.type === "auth_invalid") {
+        store.set("token", "");
+        ws.close();
+        return showSetup("Home Assistant did not accept the token.");
+      }
+      if (msg.type === "auth_ok") {
+        connected = true;
+        retry = 0;
+        try {
+          const cfg = await call({ type: "get_config" });
+          state.tz = cfg.time_zone;
+          state.locale = [cfg.language, cfg.country].filter(Boolean).join("-") || undefined;
+        } catch { /* keep the browser's */ }
+        subId = nextId;
+        call({ type: "hermes_voice/screen/subscribe", ...(state.device ? { device_id: state.device } : {}) }).catch(() =>
+          showSetup("Home Assistant answered, but Hermes Voice is not set up there (or is too old)."),
+        );
+        refreshOverview(true);
+        tick();
+        return updateMode();
+      }
+      if (msg.type === "event" && msg.id === subId) return onEvent(msg.event);
+      if (msg.type === "result" && pending.has(msg.id)) {
+        const p = pending.get(msg.id);
+        pending.delete(msg.id);
+        msg.success ? p.resolve(msg.result) : p.reject(new Error((msg.error && msg.error.message) || "failed"));
+      }
+    };
+    ws.onclose = () => {
+      connected = false;
+      for (const p of pending.values()) p.reject(new Error("closed"));
+      pending.clear();
+      updateMode();
+      retry = Math.min(retry + 1, 6);
+      setTimeout(connect, [1, 2, 3, 5, 8, 13, 20][retry] * 1000);
+    };
+  }
+
+  function showSetup(problem) {
+    $("setup").hidden = false;
+    $("setup-text").innerHTML =
+      (problem ? problem + "<br><br>" : "") +
+      "Open this page once with a Home Assistant long-lived token: <code>#token=&lt;token&gt;</code> " +
+      "(Profile → Security → Long-lived access tokens), optionally with <code>?device=&lt;device id&gt;</code>. " +
+      "Or log in to Home Assistant in this browser first.";
+  }
+
+  // --------------------------------------------------------------------------------- overview --
+  async function refreshOverview(force) {
+    if (!force && Date.now() - state.overviewAt < 60000) return;
+    try {
+      state.overview = DEMO ? demoOverview() : await call({ type: "hermes_voice/screen/overview" });
+      state.overviewAt = Date.now();
+      renderOverview();
+    } catch { /* shown as stale */ }
+  }
+
+  function renderOverview() {
+    const ov = state.overview || {};
+    const li = (title, sub) => {
+      const el = document.createElement("li");
+      const t = document.createElement("div");
+      t.className = "t";
+      t.textContent = title;
+      el.append(t);
+      if (sub) {
+        const s = document.createElement("div");
+        s.className = "s";
+        s.textContent = sub;
+        el.append(s);
+      }
+      return el;
+    };
+    const empty = (text) => {
+      const el = document.createElement("li");
+      el.className = "empty";
+      el.textContent = text;
+      return el;
+    };
+    $("ov-profile").textContent = ov.profile ? "· " + ov.profile : "";
+    $("ov-updated").textContent = state.overviewAt ? "updated " + relTime(state.overviewAt / 1000) : "";
+    const jobs = ov.jobs || [];
+    $("ov-jobs").replaceChildren(
+      ...(jobs.length
+        ? jobs.slice(0, 6).map((j) =>
+            li(j.name || "Job", [j.schedule_display, j.next_run_at ? "next " + relTime(j.next_run_at) : j.enabled === false ? "paused" : ""].filter(Boolean).join(" · ")),
+          )
+        : [empty(ov.errors && ov.errors.jobs ? "Could not load jobs" : "Nothing scheduled")]),
+    );
+    const sessions = ov.sessions || [];
+    $("ov-sessions").replaceChildren(
+      ...(sessions.length
+        ? sessions.slice(0, 6).map((s) =>
+            li(s.title || s.preview || "Conversation", [relTime(s.last_active || s.started_at), s.message_count ? s.message_count + " messages" : "", SOURCES[s.source] || s.source].filter(Boolean).join(" · ")),
+          )
+        : [empty(ov.errors && ov.errors.sessions ? "Could not load conversations" : "No conversations yet")]),
+    );
+    const h = ov.health || {};
+    const m = h.metrics_today || {};
+    const rows = [
+      ["Gateway", h.status ? `<span class="${h.status === "ok" ? "ok" : "warn"}">${h.status}</span>` : "—"],
+      ["Working", h.gateway_busy ? '<span class="warn">busy</span>' : h.active_agents ? h.active_agents + " running" : "idle"],
+      ["Requests today", m.requests != null ? m.requests : "—"],
+      ["Messages today", m.messages != null ? m.messages : "—"],
+      ["Tokens today", m.tokens != null ? Number(m.tokens).toLocaleString() : "—"],
+      ["Slowest (p95)", m.latency_p95_ms != null ? (m.latency_p95_ms / 1000).toFixed(1) + " s" : "—"],
+    ];
+    $("ov-status").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }
+
+  const SOURCES = { api_server: "voice / API", cli: "terminal", tui: "terminal", desktop: "desktop app", cron: "scheduled" };
+  let overviewTimer = null;
+  function openOverview() {
+    if (!["idle", "done", "offline"].includes(state.mode)) return;
+    $("overview").hidden = false;
+    renderOverview();
+    refreshOverview(true);
+    clearTimeout(overviewTimer);
+    overviewTimer = setTimeout(closeOverview, 90000);
+  }
+  function closeOverview() {
+    $("overview").hidden = true;
+    clearTimeout(overviewTimer);
+  }
+  $("live").addEventListener("click", openOverview);
+  $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
+
+  // ----------------------------------------------------------------------------------- avatar --
+  // <config>/www/hermes_voice/avatar.(svg|png|webp|jpg|gif) replaces the default; avatar-<state>.* per state.
+  const AVATAR_DIR = "/local/hermes_voice/";
+  const EXT = ["svg", "png", "webp", "jpg", "gif"];
+  const avatars = {};
+
+  async function findAvatar(name) {
+    for (const ext of EXT) {
+      try {
+        const r = await fetch(AVATAR_DIR + name + "." + ext, { method: "HEAD", cache: "no-store" });
+        if (r.ok) return AVATAR_DIR + name + "." + ext;
+      } catch { /* none */ }
+    }
+    return null;
+  }
+
+  async function loadAvatars() {
+    if (params.get("avatar")) avatars.base = params.get("avatar");
+    else if (!DEMO) avatars.base = await findAvatar("avatar");
+    if (!DEMO) for (const s of ["listening", "thinking", "answering"]) avatars[s] = await findAvatar("avatar-" + s);
+    applyAvatar();
+  }
+
+  function applyAvatar() {
+    const el = $("avatar");
+    const url = avatars[state.mode] || avatars.base;
+    if (!url) {
+      el.classList.remove("picture");
+      el.style.removeProperty("--avatar-image");
+      return;
+    }
+    el.classList.add("picture");
+    el.style.setProperty("--avatar-image", `url("${url}")`);
+  }
+  new MutationObserver(applyAvatar).observe(body, { attributes: true, attributeFilter: ["data-mode"] });
+
+  // ------------------------------------------------------------------------------------- demo --
+  function demoOverview() {
+    const now = Date.now();
+    return {
+      profile: "voice",
+      jobs: [
+        { name: "Morning brief", schedule_display: "weekdays 7:00", next_run_at: new Date(now + 13 * 3600e3).toISOString() },
+        { name: "Check the build", schedule_display: "every 2 h", next_run_at: new Date(now + 47 * 60e3).toISOString() },
+      ],
+      sessions: [
+        { title: "Weather in Dallas", last_active: now / 1000 - 120, message_count: 4, source: "api_server" },
+        { title: "Days until Christmas", last_active: now / 1000 - 3600, message_count: 2, source: "api_server" },
+        { title: "Recap Echo rescue and next steps", last_active: now / 1000 - 86400, message_count: 18, source: "cli" },
+      ],
+      health: { status: "ok", gateway_busy: false, active_agents: 0, metrics_today: { requests: 23, messages: 41, tokens: 182340, latency_p95_ms: 4800 } },
+      errors: {},
+    };
+  }
+
+  function runDemo() {
+    state.tz = undefined;
+    state.overview = demoOverview();
+    const dev = "demo";
+    const reply = "Tomorrow in **Dallas**: a high near 71°F, more clouds than sun and little chance of rain. North winds 5–10 mph, low around 54. Source: [National Weather Service](https://forecast.weather.gov/).";
+    const steps = [
+      [2500, { type: "state", state: "listening" }],
+      [2600, { type: "state", state: "processing" }],
+      [300, { type: "heard", text: "What's the weather in Dallas tomorrow?" }],
+      [900, { type: "tool_start", id: "c1", tool: "web_search", label: "Dallas weather tomorrow" }],
+      [1800, { type: "tool_end", id: "c1" }],
+      [200, { type: "tool_start", id: "c2", tool: "web_extract", label: "forecast.weather.gov" }],
+      [1200, { type: "tool_end", id: "c2" }],
+      [300, { type: "state", state: "responding" }],
+      ...reply.split(/(?<= )/).map((w) => [70, { type: "delta", text: w }]),
+      [300, { type: "reply_done", text: reply }],
+      [3000, { type: "state", state: "idle" }],
+      [9000, { type: "state", state: "listening" }],
+      [2200, { type: "state", state: "processing" }],
+      [400, { type: "local_answer", heard: "What time is it?", text: "" }],
+      [2500, { type: "state", state: "idle" }],
+    ];
+    holdMs = 6000;
+    let i = 0;
+    const next = () => {
+      if (i >= steps.length) { i = 0; setTimeout(next, 8000); return; }
+      const [wait, ev] = steps[i++];
+      setTimeout(() => {
+        const now = timeParts(new Date());
+        onEvent({ ...ev, ...(ev.type === "local_answer" ? { text: (now.time + " " + now.ampm).trim() } : {}), device_id: dev });
+        next();
+      }, wait);
+    };
+    state.focus = dev;
+    state.satellite[dev] = "idle";
+    setMode("idle");
+    if (params.get("demo") !== "idle") next();
+  }
+  // ------------------------------------------------------------------------------------ start --
+  setInterval(tick, 1000);
+  tick();
+  loadAvatars();
+  if (DEMO) runDemo();
+  else connect();
+})();
