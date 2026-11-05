@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import time
 from typing import Any, ClassVar
+from urllib.parse import urlsplit
 
 from aiohttp import web
 from homeassistant.components import websocket_api
@@ -28,13 +29,21 @@ from homeassistant.helpers.event import async_track_state_change_event
 import voluptuous as vol
 
 from .client import HermesError
-from .const import DOMAIN, LOGGER
+from .const import (
+    ACTIVITY_OFF,
+    CONF_ACTIVITY_PORT,
+    CONF_SCREEN_ACTIVITY,
+    DEFAULT_ACTIVITY_PORT,
+    DEFAULT_SCREEN_ACTIVITY,
+    DOMAIN,
+    LOGGER,
+)
 
 DATA_SCREEN = f"{DOMAIN}_screen"
 SATELLITE = "assist_satellite"
 SCREEN_URL = "/hermes_voice/screen"
 SCREEN_DIR = Path(__file__).parent / "screen"
-OVERVIEW_TTL = 60.0
+OVERVIEW_TTL = 25.0  # the screen asks about twice a minute while idle
 MAX_TEXT = 4000  # characters of one reply kept for a screen that connects late
 
 type ScreenCallback = Callable[[dict[str, Any]], None]
@@ -61,6 +70,7 @@ JOB_FIELDS = (
     "state",
 )
 HEALTH_FIELDS = ("status", "gateway_busy", "active_agents", "metrics_today", "version")
+TASK_FIELDS = ("id", "title", "assignee", "status", "board", "started_at", "completed_at")
 
 
 @dataclass(slots=True)
@@ -219,8 +229,16 @@ class ScreenHub:
             return cached[1]
         client = entry.runtime_data.client
         paths = {"jobs": "/api/jobs", "sessions": "/api/sessions?limit=8", "health": "/health/detailed"}
+        scope = entry.options.get(CONF_SCREEN_ACTIVITY, DEFAULT_SCREEN_ACTIVITY)
+        if scope != ACTIVITY_OFF:
+            # The read-only activity helper next to Hermes (screen_activity.py), same host as the gateway.
+            host = urlsplit(client.base_url).hostname or "localhost"
+            port = int(entry.options.get(CONF_ACTIVITY_PORT, DEFAULT_ACTIVITY_PORT))
+            paths["activity"] = f"http://{host}:{port}/activity?scope={scope}"
         results = await asyncio.gather(
-            *(client.async_get_json(p) for p in paths.values()), return_exceptions=True
+            # The helper answers from its cache; only its very first answer runs `hermes` (a few seconds).
+            *(client.async_get_json(p, 15 if k == "activity" else 5) for k, p in paths.items()),
+            return_exceptions=True,
         )
         out: dict[str, Any] = {"profile": entry.title, "errors": {}}
         for key, res in zip(paths, results, strict=True):
@@ -235,6 +253,14 @@ class ScreenHub:
                 out["sessions"] = [
                     _pick(s, SESSION_FIELDS) for s in res.get("data", []) if isinstance(s, dict)
                 ]
+            elif key == "activity":
+                out["activity"] = {
+                    "scope": res.get("scope", scope),
+                    **{
+                        part: [_pick(t, TASK_FIELDS) for t in res.get(part, []) if isinstance(t, dict)]
+                        for part in ("running", "attention", "recent")
+                    },
+                }
             else:
                 out["health"] = _pick(res, HEALTH_FIELDS)
         self._overview[entry.entry_id] = (time.monotonic(), out)

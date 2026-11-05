@@ -333,6 +333,11 @@ hermes_voice serves at `/hermes_voice/screen`.
    **Hermes Screen**. The pull-down from the top still reaches hassmic's face and music; Home brings Hermes
    Screen back.
 
+5. **Background work (optional)**: to show Hermes' running and finished tasks on the idle screen, run the
+   read-only helper next to Hermes: `python3 skill/hermes-voice-setup/scripts/screen_activity.py --profile voice
+   --install`. By default only the voice profile's tasks are shown; Hermes Voice → Configure → *Background
+   work on the screen* switches to all profiles or off.
+
 To go back: pick the face on the Screen page; `adb uninstall org.hermesvoice.screen` removes the app.
 
 ## Wake word: "Hey Hermes"

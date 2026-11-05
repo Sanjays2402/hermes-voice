@@ -1,8 +1,24 @@
 # Hermes screen for the Echo Show (design)
 
-Status: steps 1–3 are built and run on an Echo Show 5 as its home screen (the feed, the page, the app:
-install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-screen-on-an-echo-show)). Step 4
-(memories and background work in the overview) waits on Hermes exposing them.
+Status: steps 1–4 are built and run on an Echo Show 5 as its home screen (the feed, the page, the app:
+install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-screen-on-an-echo-show); background
+work: [Background work](#background-work)). Memories and suggestions are not built. The research record is
+[docs/research/2026-11-05-hermes-screen.md](research/2026-11-05-hermes-screen.md).
+
+## Background work
+
+The idle screen shows what Hermes is doing on its task board (kanban): tasks running, ready for your review
+or blocked, and finished in the last 3 hours. Without any, it shows the next scheduled job, or nothing.
+
+- **Who sees what.** Hermes Voice → Configure → *Background work on the screen*: **This profile only**
+  (default: tasks assigned to the voice profile, the agent you set up for the device), **All profiles**
+  (every profile's task titles, to anyone who can see the screen), or **Off**. Or ask Hermes: the skill runs
+  `ha_setup.py --profile voice --screen-activity all|profile|off`.
+- **How.** Home Assistant cannot run `hermes` and Hermes' API has no task-board endpoint, so a small
+  read-only helper runs next to Hermes: `screen_activity.py --profile voice --install` (in the skill). It
+  runs `hermes kanban ... --json`, listens on 127.0.0.1:8660, accepts only the voice profile's API key, and
+  passes on titles, owners, status and times, never task bodies or results. `--check` prints what the
+  screen would get.
 
 Idle shows a close-up of the avatar's eyes behind the clock (zoom 8×; `?zoom=`, and `?eyes=x,y` for where the
 eyes are in a custom picture); on the wake word it zooms out to the whole avatar on the right, and back after

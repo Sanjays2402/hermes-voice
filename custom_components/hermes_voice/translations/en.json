@@ -46,7 +46,9 @@
           "timeout": "Timeout",
           "stream": "Stream replies",
           "working_phrase": "Working phrase",
-          "send_time": "Tell Hermes the date and time"
+          "send_time": "Tell Hermes the date and time",
+          "screen_activity": "Background work on the screen",
+          "activity_port": "Activity helper port"
         },
         "data_description": {
           "session_mode": "Per conversation: one Hermes session per Assist conversation (Home Assistant ends a conversation after 5 minutes of silence). Per device: one session per voice device that continues until it has been idle for the reset time.",
@@ -57,7 +59,9 @@
           "fallback_message": "Spoken instead of raw error text when Hermes is rate limited, slow or unreachable.",
           "stream": "Start speaking while Hermes is still writing (needs a text-to-speech engine that supports streaming, such as Piper via Wyoming).",
           "working_phrase": "Said when Hermes starts a tool (web search, ...) before saying anything else, so a slow answer does not start with silence. Leave empty to turn off. Needs Stream replies.",
-          "send_time": "Adds Home Assistant's local date and time to the system message on every turn, so Hermes can answer \"what time is it?\" and date questions. Hermes has no clock of its own."
+          "send_time": "Adds Home Assistant's local date and time to the system message on every turn, so Hermes can answer \"what time is it?\" and date questions. Hermes has no clock of its own.",
+          "screen_activity": "What the Hermes screen shows of Hermes' task board: tasks running, needing attention or just finished. \"This profile\" keeps to tasks assigned to this Hermes profile. \"All profiles\" shows every profile's tasks to anyone who can see the screen. Needs the activity helper (screen_activity.py) running next to Hermes.",
+          "activity_port": "Where the activity helper listens, on the same host as the Hermes gateway (default 8660)."
         }
       }
     }
@@ -67,6 +71,13 @@
       "options": {
         "per_conversation": "Per conversation",
         "per_device": "Per device (idle window)"
+      }
+    },
+    "screen_activity": {
+      "options": {
+        "off": "Off",
+        "profile": "This profile only",
+        "all": "All profiles"
       }
     }
   }

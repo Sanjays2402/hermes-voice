@@ -115,6 +115,11 @@ The tested Echo Show 5 needed no opening, but its first unlock run reported succ
 worked. The device guide has the exact downloads, disk space, timings and the full run
 ([Echo Show 5 notes](devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb)).
 
+## Research log
+
+Everything tested on real hardware is written down in [docs/research/](docs/research/README.md): what was
+checked, the evidence, the decisions and why, and what went wrong.
+
 ## Known limits
 
 - **Latency**: about 3.5 s per plain turn in testing, almost all of it the model; Home Assistant adds about

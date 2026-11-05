@@ -30,12 +30,15 @@ from yarl import URL
 
 from .client import HermesAuthError, HermesClient, HermesError, normalize_base_url
 from .const import (
+    ACTIVITY_SCOPES,
+    CONF_ACTIVITY_PORT,
     CONF_API_KEY,
     CONF_BASE_URL,
     CONF_DISPLAY_NAME,
     CONF_FALLBACK_MESSAGE,
     CONF_IDLE_RESET_MINUTES,
     CONF_MODEL,
+    CONF_SCREEN_ACTIVITY,
     CONF_SEND_TIME,
     CONF_SESSION_MODE,
     CONF_STREAM,
@@ -44,8 +47,10 @@ from .const import (
     CONF_VOICE_CLEANUP,
     CONF_VOICE_INSTRUCTION,
     CONF_WORKING_PHRASE,
+    DEFAULT_ACTIVITY_PORT,
     DEFAULT_DISPLAY_NAME,
     DEFAULT_OPTIONS,
+    DEFAULT_SCREEN_ACTIVITY,
     DOMAIN,
     LOGGER,
     SESSION_MODES,
@@ -186,6 +191,16 @@ class HermesVoiceOptionsFlow(OptionsFlowWithReload):
                 vol.Optional(CONF_STREAM, default=True): BooleanSelector(),
                 vol.Optional(CONF_WORKING_PHRASE, default=""): str,
                 vol.Optional(CONF_SEND_TIME, default=True): BooleanSelector(),
+                vol.Optional(CONF_SCREEN_ACTIVITY, default=DEFAULT_SCREEN_ACTIVITY): SelectSelector(
+                    SelectSelectorConfig(
+                        options=ACTIVITY_SCOPES,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key=CONF_SCREEN_ACTIVITY,
+                    )
+                ),
+                vol.Optional(CONF_ACTIVITY_PORT, default=DEFAULT_ACTIVITY_PORT): NumberSelector(
+                    NumberSelectorConfig(min=1, max=65535, step=1, mode=NumberSelectorMode.BOX)
+                ),
                 vol.Optional(CONF_VOICE_INSTRUCTION, default=""): TextSelector(
                     TextSelectorConfig(multiline=True)
                 ),

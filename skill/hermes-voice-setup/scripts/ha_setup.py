@@ -192,6 +192,10 @@ def main() -> None:
     p.add_argument("--component-src", default=DEFAULT_COMPONENT)
     p.add_argument("--session-mode", choices=["per_conversation", "per_device"])
     p.add_argument("--idle-reset-minutes", type=float)
+    p.add_argument("--screen-activity", choices=["off", "profile", "all"],
+                   help="what the Hermes screen shows of Hermes' background work: off, this profile's tasks "
+                   "(default) or every profile's (all: anyone who sees the screen sees every profile's task titles). "
+                   "Needs screen_activity.py --install")
     p.add_argument("--set-default", action="store_true", help="make it the conversation agent of the preferred Assist pipeline "
                    "and turn on 'Prefer handling commands locally' there (time, timers, device control)")
     p.add_argument("--time-zone", help="time zone for a Home Assistant this script onboards, e.g. "
@@ -330,7 +334,7 @@ def main() -> None:
         entry = r["result"]
 
     # 5. options
-    if entry and (a.session_mode or a.idle_reset_minutes is not None):
+    if entry and (a.session_mode or a.idle_reset_minutes is not None or a.screen_activity):
         f = http("POST", ha + "/api/config/config_entries/options/flow", token=token, body={"handler": entry["entry_id"]})[1]
         cur = {d["name"]: d.get("description", {}).get("suggested_value") for d in f["data_schema"]}
         new = dict(cur)
@@ -338,6 +342,8 @@ def main() -> None:
             new["session_mode"] = a.session_mode
         if a.idle_reset_minutes is not None:
             new["idle_reset_minutes"] = a.idle_reset_minutes
+        if a.screen_activity:
+            new["screen_activity"] = a.screen_activity
         if new != cur and act(f"set options {({k: v for k, v in new.items() if cur.get(k) != v})}"):
             http("POST", f"{ha}/api/config/config_entries/options/flow/{f['flow_id']}", token=token, body=new)
         else:

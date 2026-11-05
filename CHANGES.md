@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Background work on the Hermes screen (`docs/show-screen.md`, step 4): the idle screen shows Hermes' tasks
+  that are running, ready for review or blocked, and that finished in the last 3 hours, instead of the last
+  question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
+  from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
+  screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
+- Research logs in `docs/research/`: the Echo Show 5 install and the Hermes screen, kept like a study.
 - Hermes Screen app for the Echo Show (`devices/echo/screen-app/`, step 3 of `docs/show-screen.md`): a
   full-screen WebView of the screen page, network permission only, built with `build.sh` (no Gradle),
   installed over echo-dot-assist's debug access and picked as the home app. The idle screen is now a
