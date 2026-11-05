@@ -3,6 +3,10 @@
 Talk to one of your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles out loud, through
 Home Assistant Assist, on an old Amazon Echo running echo-dot-assist.
 
+[echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) replaces the Alexa client while
+keeping Fire OS and the Echo's audio processing. Hermes Voice runs on the Home Assistant and Hermes
+hosts. It connects Assist to a Hermes profile once the Echo has been set up as an Assist satellite.
+
 ```
  Echo (echo-dot-assist)          Home Assistant                        Hermes Agent
  ┌──────────────┐  audio  ┌──────────────────────────────┐  HTTPS/HTTP  ┌─────────────────────┐
@@ -42,8 +46,9 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
 ## What you need
 
 - A Hermes Agent install with a working model provider (`hermes setup`).
-- Docker, if you do not run Home Assistant yet (the skill can start one, plus speech-to-text and
-  text-to-speech).
+- Docker Desktop on macOS for the one-machine setup shown below. The skill can also configure an
+  existing Home Assistant installation. The Docker examples use `host.docker.internal`; with native
+  Docker on Linux, configure addresses that the Home Assistant container can reach.
 - A voice device: an Echo Dot running [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist)
   (see [devices/echo/README.md](devices/echo/README.md)), or another Assist satellite.
 
@@ -51,7 +56,7 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
 
 1. Install the skill:
    ```bash
-   hermes skills install OWNER/hermes-voice/skill/hermes-voice-setup
+   hermes skills install majorminorlabs/hermes-voice/skill/hermes-voice-setup
    ```
    It carries everything it needs: setup scripts, the Home Assistant integration and the "Hey Hermes"
    wake word model.
@@ -75,7 +80,7 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
 1. Prepare a voice profile and start its API server: [docs/voice-profile.md](docs/voice-profile.md).
 2. HACS → ⋮ → Custom repositories → add this repository's URL, category *Integration* → install
    **Hermes Voice** → restart Home Assistant. Or download `hermes_voice-<version>.zip` from the release,
-   unzip it into `<config>/custom_components/` (you get `custom_components/hermes_voice/`) and restart.
+   unzip it into `<config>/custom_components/` to create `<config>/custom_components/hermes_voice/`, then restart.
 3. Settings → Devices & services → Add integration → **Hermes Voice**: gateway URL, the profile's
    `API_SERVER_KEY`, a display name. The URL is validated with `GET /v1/models` (no model call).
 4. Settings → Voice assistants → your pipeline → Conversation agent → the new Hermes entity. The pipeline

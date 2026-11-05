@@ -17,6 +17,8 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+# macOS Finder metadata
+.DS_Store
 # wake word training data and outputs (large); trained model is committed explicitly if wanted
 wakeword/work/
 wakeword/.venv/

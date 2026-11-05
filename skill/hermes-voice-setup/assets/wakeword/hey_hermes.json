@@ -2,7 +2,7 @@
   "type": "micro",
   "wake_word": "Hey Hermes",
   "author": "hermes-voice contributors",
-  "website": "https://github.com/OWNER/hermes-voice",
+  "website": "https://github.com/majorminorlabs/hermes-voice",
   "model": "hey_hermes.tflite",
   "trained_languages": [
     "en"

@@ -18,7 +18,7 @@ First version.
   - optional voice instruction system message;
   - spoken fallback on rate limit, timeout, connection, auth and agent errors (including Hermes' HTTP 200
     replies that carry a failed run);
-  - 71 tests (pytest-homeassistant-custom-component), ruff and mypy clean.
+  - 75 tests (pytest-homeassistant-custom-component), ruff and mypy clean.
 - `hermes-voice-setup` Hermes skill, installable on its own (`hermes skills install`; carries the
   integration and wake word model in `assets/`), with idempotent, `--dry-run`-capable scripts:
   `voice_profile.py` (with `--tools safe|home|full|<list>`: what the voice assistant may do, and

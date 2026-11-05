@@ -4,10 +4,10 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["conversation"],
-  "documentation": "https://github.com/OWNER/hermes-voice",
+  "documentation": "https://github.com/majorminorlabs/hermes-voice",
   "integration_type": "service",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/OWNER/hermes-voice/issues",
+  "issue_tracker": "https://github.com/majorminorlabs/hermes-voice/issues",
   "requirements": [],
   "version": "0.1.0"
 }

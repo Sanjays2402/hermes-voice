@@ -24,9 +24,6 @@ diff -rq -x __pycache__ custom_components/hermes_voice "$ASSETS/hermes_voice" >/
   cmp -s wakeword/model/hey_hermes.json "$ASSETS/wakeword/hey_hermes.json" ||
   { echo "skill assets are out of date: run tools/sync_skill_assets.sh and commit" >&2; exit 1; }
 tools/check_clean.sh || { echo "fix the findings above before releasing" >&2; exit 1; }
-if git grep -q "github.com/OWNER/hermes-voice"; then
-  echo "note: OWNER placeholder still in the files (see PUBLISH.md step 1)" >&2
-fi
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

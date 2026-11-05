@@ -6,7 +6,7 @@ https://github.com/Gamer92000/echo-dot-assist (MIT). Nothing from that project i
 
 ## What it does
 
-echo-dot-assist replaces Alexa on the Echo with its own daemon. Home Assistant discovers the Echo as an
+echo-dot-assist keeps Fire OS and replaces the Alexa client with its own daemon. Home Assistant discovers the Echo as an
 ESPHome device, and you pick an Assist pipeline for it. Getting into the Echo relies on R0rt1z2's
 unlock work (amonet, kamakiri, kaeru). Its README warns that the install can brick the Echo.
 

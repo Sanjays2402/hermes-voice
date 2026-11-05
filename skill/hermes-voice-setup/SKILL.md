@@ -75,7 +75,7 @@ with `--profile` and refuse `default`.
 2. **Home Assistant.** Ask whether they already run HA.
    - Existing HA: they create a long-lived token (HA → Profile → Security) and save it to a file.
      Install the integration via HACS (custom repository) unless you can write to HA's config directory,
-     then run `ha_setup.py --profile <name> --token-file FILE [--config-dir DIR] --hermes-url URL`.
+     then run `ha_setup.py --profile <name> --ha-url HA_URL --token-file FILE --hermes-url HERMES_URL`.
      `--hermes-url` must be the address HA can reach (LAN IP of this machine, not 127.0.0.1, unless HA runs
      in Docker on this same machine, where the default `host.docker.internal` works). If HA is on another
      machine, the profile's API server must listen on the LAN: rerun `voice_profile.py --host 0.0.0.0`.
@@ -91,15 +91,17 @@ with `--profile` and refuse `default`.
      `speech_setup.py --docker --data-dir DIR --set-default --internal-url http://<LAN-IP>:8123`. It runs
      Wyoming Whisper (Parakeet model for English) and Piper in Docker on 127.0.0.1, adds them to HA and sets
      them on the preferred pipeline. Without `--docker` it only adds servers that already run
-     (`--whisper-host/--piper-host`). Users with HA OS can use the Whisper and Piper add-ons, or HA Cloud.
+     (`--whisper-host/--piper-host`). With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
+     Users with HA OS can use the Whisper and Piper add-ons, or HA Cloud.
 3. **Device.** Read `references/devices.md` and walk the user through the Echo path (echo-dot-assist).
-   It replaces the Echo's firmware via a bootloader exploit, can brick the device, and is the user's
-   decision; link to its guide, do not run its installer for them.
+   echo-dot-assist unlocks the bootloader and writes the system partition to replace the Alexa client
+   while keeping Fire OS. The install can brick the device. Link to its guide for the user to run.
    Then offer the "Hey Hermes" wake word: the model is in `${HERMES_SKILL_DIR}/assets/wakeword/`. The user
    uploads both files on the Echo's settings page (`http://<echo-ip>:28931/`, approval by the Echo's action
    button; steps in `references/devices.md`), then you set the Echo's `select.<echo>_wake_word` entity to
    "Hey Hermes" through HA's API (`POST /api/services/select/select_option`).
 4. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
+   With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
    Success = a reply in the profile's own voice/personality and `"recalled": true`.
 
 ## Pitfalls

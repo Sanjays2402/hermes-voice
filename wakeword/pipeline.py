@@ -260,7 +260,7 @@ def stage_export(work: Path, out: Path, cutoff: float, arena: int) -> None:
     out.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, out / "hey_hermes.tflite")
     manifest = {"type": "micro", "wake_word": "Hey Hermes", "author": "hermes-voice contributors",
-                "website": "https://github.com/OWNER/hermes-voice", "model": "hey_hermes.tflite",
+                "website": "https://github.com/majorminorlabs/hermes-voice", "model": "hey_hermes.tflite",
                 "trained_languages": ["en"], "version": 2,
                 "micro": {"probability_cutoff": cutoff, "feature_step_size": 10, "sliding_window_size": 5,
                           "tensor_arena_size": arena, "minimum_esphome_version": "2024.7.0"}}
