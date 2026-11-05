@@ -36,6 +36,7 @@ from .const import (
     CONF_FALLBACK_MESSAGE,
     CONF_IDLE_RESET_MINUTES,
     CONF_MODEL,
+    CONF_SEND_TIME,
     CONF_SESSION_MODE,
     CONF_STREAM,
     CONF_TIMEOUT,
@@ -184,6 +185,7 @@ class HermesVoiceOptionsFlow(OptionsFlowWithReload):
                 vol.Required(CONF_VOICE_CLEANUP): BooleanSelector(),
                 vol.Optional(CONF_STREAM, default=True): BooleanSelector(),
                 vol.Optional(CONF_WORKING_PHRASE, default=""): str,
+                vol.Optional(CONF_SEND_TIME, default=True): BooleanSelector(),
                 vol.Optional(CONF_VOICE_INSTRUCTION, default=""): TextSelector(
                     TextSelectorConfig(multiline=True)
                 ),

@@ -107,3 +107,12 @@ uses that default.
 - Lower the model's thinking effort for the voice profile: `voice_profile.py --profile <name> --reasoning low`
   and `hermes -p <name> gateway restart`.
 - Fewer tools means a shorter prompt: `--tools safe` cut the prompt from about 12,000 to 3,800 tokens.
+
+## "What time is it?" gets "I can't reliably look up the time"
+
+Hermes has no clock. Versions up to 0.1.0 did not tell it the time, so Hermes searched the web for
+it, and time pages show the time only in a browser. Update the integration (it now sends Home Assistant's
+local date and time on every turn; option *Tell Hermes the date and time*), and check Home Assistant's time
+zone (Settings → System → General). With *Prefer handling commands locally* on in the pipeline, Home
+Assistant answers the time itself.
+

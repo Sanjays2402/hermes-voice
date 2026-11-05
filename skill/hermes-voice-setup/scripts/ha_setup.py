@@ -85,7 +85,22 @@ def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return proc
 
 
-def onboard(ha: str, secrets_dir: str) -> str | None:
+def local_time_zone() -> str | None:
+    """This computer's IANA time zone (TZ, /etc/timezone or the /etc/localtime link), or None."""
+    tz = os.environ.get("TZ", "").lstrip(":")
+    if "/" in tz and not tz.startswith("/"):
+        return tz
+    try:
+        tz = read_text("/etc/timezone").strip()
+        if "/" in tz:
+            return tz
+    except OSError:
+        pass
+    link = os.path.realpath("/etc/localtime")
+    return link.split("/zoneinfo/", 1)[1] if "/zoneinfo/" in link else None
+
+
+def onboard(ha: str, secrets_dir: str, time_zone: str | None = None) -> str | None:
     """Create the first user on a fresh HA and return a long-lived token (or None in dry-run)."""
     client_id = ha + "/"
     if not act("onboard fresh Home Assistant (admin user 'hermes-voice', password saved to secrets dir)"):
@@ -104,6 +119,12 @@ def onboard(ha: str, secrets_dir: str) -> str | None:
                        ("integration", {"client_id": client_id, "redirect_uri": client_id + "?auth_callback=1"})):
         http("POST", f"{ha}/api/onboarding/{step}", token=access, body=body)
     ws = ha_ws(ha, access)
+    # Onboarding leaves a new HA on UTC: its answers to "what time is it?" (and the time hermes_voice tells
+    # Hermes) would be off by hours.
+    if time_zone:
+        res = ws.call("config/core/update", time_zone=time_zone)
+        say(f"   time zone {time_zone}" if res.get("success") else f"   could not set time zone {time_zone}: "
+            f"{res.get('error')}; set it in Settings → System → General")
     res = ws.call("auth/long_lived_access_token", client_name="hermes-voice", lifespan=3650)
     ws.close()
     if not res.get("success"):
@@ -171,7 +192,12 @@ def main() -> None:
     p.add_argument("--component-src", default=DEFAULT_COMPONENT)
     p.add_argument("--session-mode", choices=["per_conversation", "per_device"])
     p.add_argument("--idle-reset-minutes", type=float)
-    p.add_argument("--set-default", action="store_true", help="make it the conversation agent of the preferred Assist pipeline")
+    p.add_argument("--set-default", action="store_true", help="make it the conversation agent of the preferred Assist pipeline "
+                   "and turn on 'Prefer handling commands locally' there (time, timers, device control)")
+    p.add_argument("--time-zone", help="time zone for a Home Assistant this script onboards, e.g. "
+                   "America/Chicago (default: this computer's)")
+    p.add_argument("--no-local-commands", action="store_true", help="with --set-default: leave 'Prefer handling "
+                   "commands locally' off, so every sentence goes to Hermes")
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     set_dry_run(a.dry_run)
@@ -219,7 +245,7 @@ def main() -> None:
     status, steps = http("GET", ha + "/api/onboarding")
     fresh = status == 200 and isinstance(steps, list) and any(s["step"] == "user" and not s["done"] for s in steps)
     if token is None and fresh:
-        token = onboard(ha, a.secrets_dir)
+        token = onboard(ha, a.secrets_dir, a.time_zone or local_time_zone())
     elif token is None and not a.dry_run:
         die("HA is already onboarded: create a long-lived token (Profile > Security) and pass --token-file")
     if token and http("GET", ha + "/api/", token=token)[0] != 200:
@@ -331,12 +357,17 @@ def main() -> None:
         if a.set_default and agent_id:
             pl = ws.call("assist_pipeline/pipeline/list")["result"]
             pref = next(x for x in pl["pipelines"] if x["id"] == pl["preferred_pipeline"])
-            if pref.get("conversation_engine") == agent_id:
-                say(f"Assist pipeline '{pref['name']}' already uses {agent_id}")
-            elif act(f"set Assist pipeline '{pref['name']}' conversation agent to {agent_id}"):
+            # Home Assistant answers its own sentences first (time, timers, lights), Hermes everything else.
+            local = not a.no_local_commands
+            if pref.get("conversation_engine") == agent_id and bool(pref.get("prefer_local_intents")) == local:
+                say(f"Assist pipeline '{pref['name']}' already uses {agent_id}"
+                    f" (prefer handling commands locally: {'on' if local else 'off'})")
+            elif act(f"set Assist pipeline '{pref['name']}' conversation agent to {agent_id}, "
+                     f"prefer handling commands locally: {'on' if local else 'off'}"):
                 upd = {k: v for k, v in pref.items() if k != "id"}
                 upd["conversation_engine"] = agent_id
                 upd["conversation_language"] = upd.get("conversation_language") or "*"
+                upd["prefer_local_intents"] = local
                 res = ws.call("assist_pipeline/pipeline/update", pipeline_id=pref["id"], **upd)
                 if not res.get("success"):
                     die(f"pipeline update failed: {res.get('error')}")

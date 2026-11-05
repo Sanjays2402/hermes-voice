@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Any, Literal
 
 from homeassistant.components import conversation
@@ -11,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import llm
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import HermesConfigEntry
 from .cleanup import VoiceChunker, clean_for_voice
@@ -19,6 +21,7 @@ from .const import (
     CONF_DISPLAY_NAME,
     CONF_FALLBACK_MESSAGE,
     CONF_IDLE_RESET_MINUTES,
+    CONF_SEND_TIME,
     CONF_SESSION_MODE,
     CONF_STREAM,
     CONF_TIMEOUT,
@@ -43,6 +46,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up the conversation entity."""
     async_add_entities([HermesConversationEntity(entry)])
+
+
+def time_context(now: datetime) -> str:
+    """One line telling Hermes the local date and time, e.g. for "what time is it?"."""
+    hour = now.hour % 12 or 12
+    when = f"{now:%A}, {now:%B} {now.day}, {now.year}, {hour}:{now:%M} {'AM' if now.hour < 12 else 'PM'}"
+    zone = getattr(now.tzinfo, "key", None) or now.tzname() or "local time"
+    return f"Current local date and time: {when} ({zone})."
 
 
 def render_user_key(template: str, user_id: str | None, device_id: str | None) -> str | None:
@@ -114,6 +125,8 @@ class HermesConversationEntity(conversation.ConversationEntity):
             idle_reset_minutes=float(self._opt(CONF_IDLE_RESET_MINUTES)),
         )
         system_parts = [self._opt(CONF_VOICE_INSTRUCTION) or ""]
+        if self._opt(CONF_SEND_TIME):
+            system_parts.append(time_context(dt_util.now()))
         if user_input.extra_system_prompt:
             system_parts.append(user_input.extra_system_prompt)
         system_prompt = "\n".join(p for p in system_parts if p.strip()) or None

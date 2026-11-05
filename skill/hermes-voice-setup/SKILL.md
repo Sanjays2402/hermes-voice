@@ -85,7 +85,9 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
    - No HA: `ha_setup.py --profile <name> --docker --config-dir DIR --set-default` starts
      `ghcr.io/home-assistant/home-assistant:stable`, onboards it, stores the admin password and a token in
      `~/.config/hermes-voice/secrets/` (0600), installs and configures `hermes_voice`.
-   - `--set-default` makes the profile the conversation agent of the preferred Assist pipeline.
+   - `--set-default` makes the profile the conversation agent of the preferred Assist pipeline and turns on
+     *Prefer handling commands locally*: Home Assistant answers its own sentences (time, timers, lights)
+     at once and sends everything else to Hermes. `--no-local-commands` leaves it off.
    - **Ask which voice** they want for replies and pass `speech_setup.py --piper-voice`, e.g.
      `en_US-lessac-medium` (female, default) or `en_US-ryan-high` (male); others:
      https://rhasspy.github.io/piper-samples/. To change it later, set the voice on the Assist pipeline
