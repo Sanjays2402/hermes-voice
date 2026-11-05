@@ -1,0 +1,20 @@
+# Pinned inputs for the "hey hermes" microWakeWord pipeline (Python 3.10-3.12).
+# Exact resolved versions per platform are recorded in requirements.lock.<platform>.txt after a run.
+# microWakeWord itself is installed editable from its source at commit 4665173cd35f1cff9a61e06fc427f124766c488e by
+# train.sh (its setup.py find_packages() skips microwakeword/audio, so a normal install is incomplete).
+audio-metadata @ git+https://github.com/whatsnowplaying/audio-metadata@d4ebb238e6a401bb1a5aaaac60c9e2b3cb30929f
+# piper-sample-generator runs from its pinned source tree (pipeline.py: PSG_SHA); these are its runtime deps.
+# Its PyPI wheel is not used: it omits piper_train/ and pins audiomentations==0.33.0 (no AddColorNoise).
+piper-tts==1.3.0
+torch>=2,<3
+torchaudio
+webrtcvad-wheels
+audiomentations==0.43.1
+datasets==3.6.0
+# PyPI 2.x has macOS/Linux wheels and the process_samples API this microWakeWord commit uses
+# (the notebook's macOS fork puddly/pymicro-features is older and incompatible now).
+pymicro-features==2.0.2
+scipy
+soundfile
+# microWakeWord logs with tf.summary; TensorFlow 2.21 no longer installs TensorBoard
+tensorboard==2.21.0

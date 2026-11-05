@@ -1,0 +1,25 @@
+# secrets
+secrets/
+*.key
+.env
+.env.*
+ha_token
+ha_admin_password
+hermes_api_key
+# Home Assistant config/state
+ha-config/
+.storage/
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+# wake word training data and outputs (large); trained model is committed explicitly if wanted
+wakeword/work/
+wakeword/.venv/
+
+# release files (tools/build_release.sh)
+dist/

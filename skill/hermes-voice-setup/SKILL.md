@@ -1,0 +1,108 @@
+---
+name: hermes-voice-setup
+description: Turn one Hermes profile into a voice assistant through Home Assistant Assist (hermes_voice integration), with an Echo Dot as the speaker.
+version: 0.1.0
+author: hermes-voice contributors
+license: MIT
+platforms: [macos, linux]
+metadata:
+  hermes:
+    tags: [voice, home-assistant, assist, echo, smart-home]
+    requires_toolsets: [terminal]
+---
+
+# Hermes Voice Setup
+
+Wires a dedicated Hermes profile into Home Assistant (HA) as an Assist conversation agent, so speech from
+a voice device goes: device → HA Assist (speech-to-text) → `hermes_voice` → this profile → HA (text-to-speech) → device.
+All scripts are stdlib Python, idempotent, and support `--dry-run`. They only touch the profile named
+with `--profile` and refuse `default`.
+
+## When to Use
+
+- The user wants to talk to their Hermes agent by voice, through Home Assistant.
+- The user has (or wants) an Echo Dot running echo-dot-assist, or any other Assist voice satellite.
+- The user asks to repair or re-verify an existing hermes_voice setup.
+
+## Quick Reference
+
+| Step | Command |
+|---|---|
+| Plan profile changes | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --create --dry-run` |
+| Prepare + start profile | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --create --write-soul --tools safe --reasoning low --start` |
+| Change what voice may do | `python3 ${HERMES_SKILL_DIR}/scripts/voice_profile.py --profile voice --tools safe\|home\|full\|web,file,...` |
+| Plan HA changes | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --dry-run` |
+| Install + configure HA | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --set-default` |
+| Text test through HA | `python3 ${HERMES_SKILL_DIR}/scripts/verify.py --recall` |
+| Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
+
+## Procedure
+
+1. **Pick the voice profile.** Ask the user which profile should be the voice. Recommend a new
+   dedicated one (default name `voice`) over their main agent. Explain why: voice turns are short, it should
+   not share the main agent's rate limit, and its tools/MCP servers should be ones they are happy to run
+   from a spoken command. Always run with `--dry-run` first and show the user the planned changes.
+   - New profile: `voice_profile.py --profile voice --create [--clone-from <main>] --write-soul --start`.
+     `--clone-from` copies that profile's config, provider login, `.env`, SOUL.md, skills, memory and
+     MCP servers. Without it the new profile needs its own provider (`hermes -p voice setup`).
+   - Existing profile: `voice_profile.py --profile <name> --start` (adds the API server key/port, marks it
+     standalone, disables `session_search`; backs up every file it edits under
+     `profiles/<name>/hermes-voice-backups/`).
+   - Already served by a multiplexing host gateway: add `--multiplexed`; the URL becomes
+     `http://127.0.0.1:8642/p/<name>/v1`.
+   - **Ask what Hermes may do by voice** and pass it as `--tools`. Anyone in earshot of the speaker can use
+     these tools. `safe` (web search, memory, todo; recommended), `home` (safe + Home Assistant control),
+     `full` (Hermes defaults: terminal, files, code, browser; for coding by voice), or an exact
+     comma-separated list. Applies to the `api_server` platform only. Restart the gateway after changing it
+     (`hermes -p <name> gateway restart`).
+2. **Home Assistant.** Ask whether they already run HA.
+   - Existing HA: they create a long-lived token (HA → Profile → Security) and save it to a file.
+     Install the integration via HACS (custom repository) unless you can write to HA's config directory,
+     then run `ha_setup.py --profile <name> --token-file FILE [--config-dir DIR] --hermes-url URL`.
+     `--hermes-url` must be the address HA can reach (LAN IP of this machine, not 127.0.0.1, unless HA runs
+     in Docker on this same machine, where the default `host.docker.internal` works). If HA is on another
+     machine, the profile's API server must listen on the LAN: rerun `voice_profile.py --host 0.0.0.0`.
+   - No HA: `ha_setup.py --profile <name> --docker --config-dir DIR --set-default` starts
+     `ghcr.io/home-assistant/home-assistant:stable`, onboards it, stores the admin password and a token in
+     `~/.config/hermes-voice/secrets/` (0600), installs and configures `hermes_voice`.
+   - `--set-default` makes the profile the conversation agent of the preferred Assist pipeline.
+   - Speech: if the pipeline has no speech-to-text / text-to-speech yet, run
+     `speech_setup.py --docker --data-dir DIR --set-default --internal-url http://<LAN-IP>:8123`. It runs
+     Wyoming Whisper (Parakeet model for English) and Piper in Docker on 127.0.0.1, adds them to HA and sets
+     them on the preferred pipeline. Without `--docker` it only adds servers that already run
+     (`--whisper-host/--piper-host`). Users with HA OS can use the Whisper and Piper add-ons, or HA Cloud.
+3. **Device.** Read `references/devices.md` and walk the user through the Echo path (echo-dot-assist).
+   It replaces the Echo's firmware via a bootloader exploit, can brick the device, and is the user's
+   decision; link to its guide, do not run its installer for them.
+   Then offer the "Hey Hermes" wake word: the model is in `${HERMES_SKILL_DIR}/assets/wakeword/`. The user
+   uploads both files on the Echo's settings page (`http://<echo-ip>:28931/`, approval by the Echo's action
+   button; steps in `references/devices.md`), then you set the Echo's `select.<echo>_wake_word` entity to
+   "Hey Hermes" through HA's API (`POST /api/services/select/select_option`).
+4. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
+   Success = a reply in the profile's own voice/personality and `"recalled": true`.
+
+## Pitfalls
+
+- **Spoken fallback ("I can't reach my brain right now")** means HA could not get an answer: gateway down,
+  wrong URL/key, timeout, or the provider is rate limited (HTTP 429). Check `hermes -p <name> gateway status`
+  and the profile's provider. A voice profile sharing the main agent's subscription hits its limits.
+- **Gateway URL from Docker**: `127.0.0.1` inside the HA container is the container. Use
+  `host.docker.internal` (Docker Desktop / OrbStack) or the host's LAN IP.
+- **HA's internal URL**: a voice device downloads each spoken reply from HA. HA in Docker hands out its
+  container address (e.g. `172.17.0.4`) unless its internal URL is set to the host's LAN address
+  (`speech_setup.py --internal-url`, or Settings → System → Network).
+- **Multiplexing**: Hermes serves all profiles from one host gateway by default. `voice_profile.py` marks
+  the voice profile `gateway.standalone: true` so it runs its own gateway on its own port. Use
+  `--multiplexed` instead if the user runs the host multiplexer with the API server enabled.
+- **Memory is profile-wide.** Anything said to the voice profile can be saved to its long-term memory and
+  recalled by every later conversation, including other household members.
+- **session_search** is disabled by the script: in voice use it caused wrong cross-conversation answers and
+  ~10 s extra latency. Re-enable with `hermes -p <name> config set agent.disabled_toolsets '[]'`.
+- HA ends an Assist conversation after 5 minutes of silence. For longer memory per speaker, set the
+  integration's session mode to `per_device` (`ha_setup.py --session-mode per_device`).
+
+## Verification
+
+- `verify.py` exits 0 and prints the reply with its latency (plain turns are typically 2–6 s).
+- In HA: Settings → Voice assistants → the pipeline's conversation agent is the profile's entity.
+- `hermes -p <name> gateway status` shows the gateway running.
