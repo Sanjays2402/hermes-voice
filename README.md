@@ -49,7 +49,7 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
 - Docker Desktop on macOS for the one-machine setup shown below. The skill can also configure an
   existing Home Assistant installation. The Docker examples use `host.docker.internal`; with native
   Docker on Linux, configure addresses that the Home Assistant container can reach.
-- A voice device: an Echo Dot running [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist)
+- A voice device: an Echo Dot or Echo Show running [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist)
   (see [devices/echo/README.md](devices/echo/README.md)), or another Assist satellite.
 
 ## Quick start (let your Hermes agent set it up)
@@ -102,13 +102,18 @@ Requires Home Assistant 2026.10 or newer (the version tested).
 | Device | Status |
 |---|---|
 | Echo Dot 2nd gen via [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) | Tested end to end (flashed from Windows, "Hey Hermes" wake word, Home Assistant in Docker on macOS). Device setup is echo-dot-assist's; it can brick the Echo. |
-| Echo Dot 3rd gen (2018), Echo 2nd gen via echo-dot-assist | Supported by echo-dot-assist; not tested by this project. |
+| Echo Show 5 1st gen (2019) via echo-dot-assist | Tested end to end (flashed from an Ubuntu live USB, "Hey Hermes" wake word, Home Assistant in Docker on macOS). Needs a Linux PC and a 16 GB drive; see [devices/echo/README.md](devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb). |
+| Echo Dot 3rd gen (2018), Echo 2nd gen, Echo Show 5 2nd gen, Echo Show 8, Echo Input via echo-dot-assist | Supported by echo-dot-assist; not tested by this project. |
 | Other Home Assistant Assist satellites (e.g. Voice PE) | Should work, since the satellite only needs a pipeline whose conversation agent is hermes_voice. Untested. |
 
 The tested Echo Dot 2 required a hardware short after the unlock stalled. The device guide records
 the Windows driver issue, recovery point, firmware mismatch and subsequent slot inspection.
 It also explains why matching firmware in both slots does not establish a working fallback.
 Read the [Echo Dot 2 recovery notes](devices/echo/README.md#echo-dot-2-recovery-on-windows) before recovering a stalled unlock.
+
+The tested Echo Show 5 needed no opening, but its first unlock run reported success and left it locked; a rerun
+worked. The device guide has the exact downloads, disk space, timings and the full run
+([Echo Show 5 notes](devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb)).
 
 ## Known limits
 
@@ -119,7 +124,7 @@ Read the [Echo Dot 2 recovery notes](devices/echo/README.md#echo-dot-2-recovery-
   429/timeout/connection errors hermes_voice speaks a fallback line. Use a separate provider or a fallback
   chain ([docs/voice-profile.md](docs/voice-profile.md)).
 - **Memory is per profile**, not per speaker; anything said may be remembered for everyone using that device.
-- **Wake word**: the "Hey Hermes" model is tested on one Echo Dot 2nd gen in one home. If it misses you
+- **Wake word**: the "Hey Hermes" model is tested on one Echo Dot 2nd gen and one Echo Show 5 1st gen in one home. If it misses you
   or wakes on its own, adjust its threshold on the Echo's settings page.
 - Streaming speech needs a text-to-speech engine that supports it (Piper via Wyoming does). With others
   the full answer is generated before speech starts.
