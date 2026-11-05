@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Live feed for a Hermes screen (`docs/show-screen.md`, step 1): websocket commands
+  `hermes_voice/screen/subscribe` (the Echo's state, what was heard, Hermes' reply as it is written, its
+  tools, and answers Home Assistant gave itself) and `hermes_voice/screen/overview` (Hermes' jobs, recent
+  sessions and status, fetched with the integration's key, which never reaches the screen); the page is
+  served at `/hermes_voice/screen/` (placeholder until step 2). The integration now depends on `http`.
 - Echo Show 5 1st gen tested end to end: install from an Ubuntu live USB with exact downloads, the unlock that
   reports success without unlocking (and how to check), disk space (16 GB drive), the release build vs. the
   NDK, timings, the screen, and the wake word step that leaves the Echo deaf if skipped

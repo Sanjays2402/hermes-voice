@@ -10,9 +10,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .client import HermesAuthError, HermesClient, HermesError
 from .const import CONF_API_KEY, CONF_BASE_URL, CONF_MODEL, DOMAIN
+from .screen import async_setup_screen
 from .session import SessionResolver
 
 PLATFORMS = (Platform.CONVERSATION,)
@@ -29,6 +31,12 @@ class HermesRuntimeData:
 
 
 type HermesConfigEntry = ConfigEntry[HermesRuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up what all entries share: the screen feed (docs/show-screen.md)."""
+    await async_setup_screen(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HermesConfigEntry) -> bool:
