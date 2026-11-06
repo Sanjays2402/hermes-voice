@@ -146,3 +146,30 @@ task touches the shared board and could start a worker, so it waits for the user
 **Next.** Suggestions ("next up"): an opt-in scheduled job in a profile that knows the user's work, its
 latest line passed on by the helper. And a request to Nous for read-only kanban and run endpoints on the
 gateway, which would make the helper unnecessary.
+
+**Live check with a real task (18:05).** One task created on the real board with
+`hermes kanban create "Hermes screen test (safe to archive)" --assignee voice --initial-status blocked`
+(created blocked, so no worker can pick it up). The helper listed it under `attention` and the live page
+showed "● Blocked: Hermes screen test (safe to archive)" under the clock.
+
+## 6. Keeping the Show's page current
+
+**Problem.** The Show keeps the page it loaded at start. After an update of the integration it went on
+running the old page: the new idle lines never appeared on the device.
+
+**Fix, first attempt.** The subscribe snapshot carries a page version (a hash of `index.html`, `app.js` and
+`style.css`, taken when Home Assistant starts); a page that reconnects and sees a different version reloads.
+*Test:* restart Home Assistant with the files unchanged → no reload (correct); change `style.css`, restart →
+**no reload** (wrong).
+
+**Cause.** The page never reconnected: with Home Assistant in Docker Desktop, a restart left the browser's
+websocket looking open (Docker Desktop's port forwarding keeps the client side alive), so `onclose` never
+fired. The same would strand the Show after a Wi-Fi drop.
+
+**Fix.** A heartbeat: the page sends Home Assistant's `ping` every 30 s; without a `pong` within 10 s it runs
+its close handling at once and reconnects. *Tests:* 75 s idle with heartbeats → no reconnect, no reload
+(correct); change `style.css`, restart Home Assistant (up at 18:10:21) → the page reloaded itself at
+18:10:24 (correct).
+
+**Caveat.** A Show still running a page from before this change has neither, so it needs one reload by hand
+(power the Show off and on; it starts Hermes Screen again with the saved address and login).

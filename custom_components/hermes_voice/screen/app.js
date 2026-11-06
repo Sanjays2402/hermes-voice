@@ -263,6 +263,9 @@
   function onEvent(ev) {
     const dev = ev.device_id === undefined ? null : ev.device_id;
     if (ev.type === "snapshot") {
+      // Home Assistant came back with a different page (an update): load it. The first snapshot sets it.
+      if (ev.page && state.page && ev.page !== state.page) return location.reload();
+      state.page = state.page || ev.page;
       Object.assign(state.satellite, ev.states || {});
       const turns = ev.turns || {};
       const key = state.device || latestDevice(turns);
@@ -388,6 +391,7 @@
       if (msg.type === "auth_ok") {
         connected = true;
         retry = 0;
+        startHeartbeat(ws);
         try {
           const cfg = await call({ type: "get_config" });
           state.tz = cfg.time_zone;
@@ -402,6 +406,11 @@
         return updateMode();
       }
       if (msg.type === "event" && msg.id === subId) return onEvent(msg.event);
+      if (msg.type === "pong" && pending.has(msg.id)) {
+        pending.get(msg.id).resolve(null);
+        pending.delete(msg.id);
+        return;
+      }
       if (msg.type === "result" && pending.has(msg.id)) {
         const p = pending.get(msg.id);
         pending.delete(msg.id);
@@ -410,12 +419,30 @@
     };
     ws.onclose = () => {
       connected = false;
+      clearInterval(heartbeat);
       for (const p of pending.values()) p.reject(new Error("closed"));
       pending.clear();
       updateMode();
       retry = Math.min(retry + 1, 6);
       setTimeout(connect, [1, 2, 3, 5, 8, 13, 20][retry] * 1000);
     };
+  }
+
+  // A connection can look open after Home Assistant is gone (a restart behind Docker Desktop's port
+  // forwarding, Wi-Fi dropping on the Echo): ping every 30 s and start over when no pong comes in 10 s.
+  let heartbeat = null;
+  function startHeartbeat(sock) {
+    clearInterval(heartbeat);
+    heartbeat = setInterval(() => {
+      const timer = setTimeout(() => {
+        // A dead connection may not close for a long while: run the close handling now, once.
+        const onclose = sock.onclose;
+        sock.onclose = null;
+        try { sock.close(); } catch { /* already gone */ }
+        if (onclose) onclose();
+      }, 10000);
+      call({ type: "ping" }).then(() => clearTimeout(timer), () => clearTimeout(timer));
+    }, 30000);
   }
 
   function showSetup(problem) {

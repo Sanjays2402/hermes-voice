@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
 import time
 from typing import Any, ClassVar
@@ -44,7 +45,13 @@ SATELLITE = "assist_satellite"
 SCREEN_URL = "/hermes_voice/screen"
 SCREEN_DIR = Path(__file__).parent / "screen"
 OVERVIEW_TTL = 25.0  # the screen asks about twice a minute while idle
-MAX_TEXT = 4000  # characters of one reply kept for a screen that connects late
+MAX_TEXT = 4000
+# The page's files, hashed once at start: a screen that reconnects after an update reloads itself.
+PAGE_FILES = (
+    "index.html",
+    "app.js",
+    "style.css",
+)  # characters of one reply kept for a screen that connects late
 
 type ScreenCallback = Callable[[dict[str, Any]], None]
 
@@ -105,6 +112,7 @@ class ScreenHub:
         self.agent_ids: set[str] = set()  # Hermes conversation entities: their turns are reported directly
         self._heard: dict[str, str] = {}  # conversation id -> the user's last words, until an answer comes
         self._overview: dict[str, tuple[float, dict[str, Any]]] = {}
+        self.page_version = ""
 
     @callback
     def async_subscribe(self, device_id: str | None, cb: ScreenCallback) -> Callable[[], None]:
@@ -280,6 +288,15 @@ class ScreenRedirectView(HomeAssistantView):
         raise web.HTTPFound(f"{SCREEN_URL}/index.html{query}")
 
 
+def _page_version() -> str:
+    digest = hashlib.sha256()
+    for name in PAGE_FILES:
+        path = SCREEN_DIR / name
+        if path.is_file():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
 def _pick(data: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {k: data[k] for k in keys if k in data}
 
@@ -303,6 +320,7 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     if DATA_SCREEN in hass.data:
         return
     hub = ScreenHub(hass)
+    hub.page_version = await hass.async_add_executor_job(_page_version)
     hass.data[DATA_SCREEN] = hub
     async_subscribe_chat_logs(hass, hub.on_chat_log)
     websocket_api.async_register_command(hass, ws_subscribe)
@@ -362,7 +380,15 @@ def ws_subscribe(
     connection.send_result(msg_id)
     states = {device_of[e]: (s.state if (s := hass.states.get(e)) else "unavailable") for e in entities}
     turns = {d: t.as_dict() for d, t in hub.turns.items() if device_id is None or d == device_id}
-    forward({"type": "snapshot", "states": states, "turns": turns, "device_id": device_id})
+    forward(
+        {
+            "type": "snapshot",
+            "states": states,
+            "turns": turns,
+            "device_id": device_id,
+            "page": hub.page_version,
+        }
+    )
 
 
 @websocket_api.websocket_command(
