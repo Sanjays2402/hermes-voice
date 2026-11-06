@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -26,6 +27,8 @@ public class MainActivity extends Activity {
     private static final String PREFS = "screen";
     private static final String KEY_URL = "url";
     private static final long RETRY_MS = 5000;
+    private static final String KEY_BRIGHTNESS = "brightness";
+    private static final float DEFAULT_BRIGHTNESS = 1.0f; // hassmic sets no screen brightness: start bright
 
     private WebView web;
     private final Handler handler = new Handler();
@@ -43,6 +46,10 @@ public class MainActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_FULLSCREEN);
         web = new WebView(this);
         web.setBackgroundColor(Color.BLACK);
+        // A cached page outlived an update on the Echo Show (it never asked the server again): start clean.
+        web.clearCache(true);
+        web.addJavascriptInterface(new Bridge(), "HermesScreen");
+        applyBrightness(getSharedPreferences(PREFS, MODE_PRIVATE).getFloat(KEY_BRIGHTNESS, DEFAULT_BRIGHTNESS));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -84,6 +91,31 @@ public class MainActivity extends Activity {
             load(url);
         } else if (web.getUrl() == null) {
             load(savedUrl());
+        }
+    }
+
+    private void applyBrightness(float value) {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = Math.max(0.05f, Math.min(1f, value));
+        getWindow().setAttributes(lp);
+    }
+
+    /** What the page may ask of the app: the screen's brightness, 0.05 to 1, remembered. */
+    private class Bridge {
+        @JavascriptInterface
+        public float getBrightness() {
+            return getSharedPreferences(PREFS, MODE_PRIVATE).getFloat(KEY_BRIGHTNESS, DEFAULT_BRIGHTNESS);
+        }
+
+        @JavascriptInterface
+        public void setBrightness(final float value) {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putFloat(KEY_BRIGHTNESS, value).apply();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    applyBrightness(value);
+                }
+            });
         }
     }
 

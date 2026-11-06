@@ -218,15 +218,25 @@ async def test_overview(
 async def test_screen_page_served(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_client: Any
 ) -> None:
-    """The screen page is served by Home Assistant."""
+    """The page is served uncached at every address a screen may have saved, with versioned file addresses."""
     await _setup(hass, aioclient_mock)
     client = await hass_client()
-    resp = await client.get("/hermes_voice/screen?device=abc")
-    assert resp.status == 200
-    assert str(resp.url).endswith("/hermes_voice/screen/index.html?device=abc")
-    page = await resp.text()
-    assert "app.js" in page and "Hermes screen" in page
-    for asset in ("app.js", "style.css", "avatar-default.svg"):
+    for path in (
+        "/hermes_voice/screen?device=abc",
+        "/hermes_voice/screen/",
+        "/hermes_voice/screen/index.html",
+    ):
+        resp = await client.get(path)
+        assert resp.status == 200, path
+        assert "no-store" in resp.headers["Cache-Control"]
+        page = await resp.text()
+        assert (
+            'src="/hermes_voice/screen/app.js?v=' in page
+            and 'href="/hermes_voice/screen/style.css?v=' in page
+        )
+    version = page.split("app.js?v=")[1].split('"')[0]
+    assert len(version) == 12
+    for asset in (f"app.js?v={version}", f"style.css?v={version}", "avatar-default.svg"):
         assert (await client.get(f"/hermes_voice/screen/{asset}")).status == 200
 
 

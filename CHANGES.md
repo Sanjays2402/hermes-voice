@@ -7,6 +7,9 @@
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
   from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
+- Hermes Screen app 0.2: clears its page cache on every start (an Echo Show kept an old page after an
+  update) and sets the screen's brightness (full by default; a slider in the overview). The page itself is
+  served uncached with versioned file addresses.
 - Screen overview: the middle column shows finished work instead of recent chat sessions; a degraded
   gateway says why (e.g. "low disk (98%)", from Hermes' readiness checks).
 - The screen page reloads itself after an update (the snapshot carries a page version) and notices a dead
