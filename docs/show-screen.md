@@ -5,6 +5,12 @@ install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-scree
 work: [Background work](#background-work)). Memories and suggestions are not built. The research record is
 [docs/research/2026-11-05-hermes-screen.md](research/2026-11-05-hermes-screen.md).
 
+## Timers, mute and Do not disturb
+
+On an Echo with hassmic the screen shows running voice timers counting down (top of the idle lines), fills
+the screen with *Timer done* and a **Stop** button while one rings (it presses the Echo's own "Stop
+ringing" button), and shows *Mic off* and *Do not disturb* next to the label.
+
 ## Background work
 
 The idle screen shows what Hermes is doing on its task board (kanban): tasks running, ready for your review

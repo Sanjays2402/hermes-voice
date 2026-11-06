@@ -15,7 +15,7 @@ if ! diff -rq -x __pycache__ "$ROOT/custom_components/hermes_voice" "$ASSETS/her
 fi
 docker image inspect "$IMAGE" >/dev/null 2>&1 || docker build -t "$IMAGE" "$ROOT/tests/docker"
 docker run --rm -v "$ROOT:/repo" -w /repo -e PYTHONDONTWRITEBYTECODE=1 -e MYPY_CACHE_DIR=/tmp/mypy -e RUFF_CACHE_DIR=/tmp/ruff "$IMAGE" sh -c "
-  python -m pytest -p no:cacheprovider -q ${*:-} &&
+  python -m pytest -p no:cacheprovider -q --timeout 60 ${*:-} &&
   ruff check custom_components tests &&
   ruff format --check custom_components tests &&
   mypy custom_components/hermes_voice"

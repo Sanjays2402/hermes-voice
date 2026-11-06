@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import aiohttp
 from homeassistant.components import conversation
+from homeassistant.components.intent.const import TIMER_DATA
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import chat_session, device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -74,6 +76,7 @@ async def test_stream_turn_reaches_screen(
     snapshot = (await ws.receive_json())["event"]
     assert snapshot["type"] == "snapshot"
     assert snapshot["states"] == {device_id: "idle"}
+    assert (await ws.receive_json())["event"] == {"type": "timers", "timers": [], "device_id": device_id}
     assert len(snapshot["page"]) == 12  # the page's version: a screen reloads when it changes
 
     await conversation.async_converse(
@@ -99,6 +102,7 @@ async def test_other_device_and_snapshot(
     await ws.send_json({"id": 1, "type": "hermes_voice/screen/subscribe", "device_id": device_id})
     await ws.receive_json()
     await ws.receive_json()  # snapshot
+    await ws.receive_json()  # timers (none)
     await conversation.async_converse(
         hass, "elsewhere", None, Context(user_id="u"), agent_id=AGENT, device_id="other"
     )
@@ -134,7 +138,8 @@ async def test_satellite_state(
     ws = await hass_ws_client(hass)
     await ws.send_json({"id": 1, "type": "hermes_voice/screen/subscribe", "device_id": device_id})
     await ws.receive_json()
-    await ws.receive_json()
+    await ws.receive_json()  # snapshot
+    await ws.receive_json()  # timers (none)
     for state in ("listening", "processing", "responding", "idle"):
         hass.states.async_set(entity_id, state)
         await hass.async_block_till_done()
@@ -152,7 +157,8 @@ async def test_local_answer(
     ws = await hass_ws_client(hass)
     await ws.send_json({"id": 1, "type": "hermes_voice/screen/subscribe"})
     await ws.receive_json()
-    await ws.receive_json()
+    await ws.receive_json()  # snapshot
+    await ws.receive_json()  # timers (none)
     # As the Assist pipeline does when "Prefer handling commands locally" answers a sentence itself.
     user_input = conversation.ConversationInput(
         text="What time is it?",
@@ -320,3 +326,98 @@ async def test_overview_health_warnings(
     health = (await ws.receive_json())["result"]["health"]
     assert health["status"] == "degraded"
     assert health["warnings"] == [{"check": "disk", "status": "degraded", "used_percent": 97.5}]
+
+
+def _controls(hass: HomeAssistant, device_id: str, config_entry: MockConfigEntry) -> dict[str, str]:
+    """The entities hassmic exposes for an Echo (by original name), with states."""
+    registry = er.async_get(hass)
+    out = {}
+    for domain, name, key, state in (
+        ("switch", "Mute", "mute", "off"),
+        ("switch", "Do not disturb", "dnd", "on"),
+        ("binary_sensor", "Timer ringing", "ringing", "off"),
+        ("sensor", "Ringing timers", "names", ""),
+        ("button", "Stop ringing", "stop", "unknown"),
+    ):
+        ent = registry.async_get_or_create(
+            domain,
+            "esphome",
+            f"echo-{key}",
+            device_id=device_id,
+            config_entry=config_entry,
+            original_name=name,
+        )
+        hass.states.async_set(ent.entity_id, state)
+        out[key] = ent.entity_id
+    return out
+
+
+async def test_device_status_and_stop(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Mute, Do not disturb and a ringing timer reach the screen; Stop presses the Echo's own button."""
+    entry = await _setup(hass, aioclient_mock)
+    device_id, _ = _echo(hass, entry)
+    esphome = next(e for e in hass.config_entries.async_entries("esphome"))
+    ids = _controls(hass, device_id, esphome)
+    pressed: list[str] = []
+
+    async def press(call: Any) -> None:
+        pressed.extend(
+            call.data["entity_id"] if isinstance(call.data["entity_id"], list) else [call.data["entity_id"]]
+        )
+
+    hass.services.async_register("button", "press", press)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/subscribe", "device_id": device_id})
+    await ws.receive_json()
+    snapshot = (await ws.receive_json())["event"]
+    assert snapshot["devices"][device_id] == {
+        "mute": False,
+        "dnd": True,
+        "ringing": False,
+        "ringing_names": "",
+        "can_stop": True,
+    }
+    await ws.receive_json()  # the first timers event (none)
+    hass.states.async_set(ids["names"], "Pasta")
+    hass.states.async_set(ids["ringing"], "on")
+    await hass.async_block_till_done()
+    events = [(await ws.receive_json())["event"] for _ in range(2)]
+    assert (
+        events[-1]["type"] == "device"
+        and events[-1]["ringing"] is True
+        and events[-1]["ringing_names"] == "Pasta"
+    )
+
+    ws2 = await hass_ws_client(hass)
+    await ws2.send_json({"id": 1, "type": "hermes_voice/screen/stop_timer", "device_id": device_id})
+    assert (await ws2.receive_json())["success"]
+    assert pressed == [ids["stop"]]
+    await ws2.send_json({"id": 2, "type": "hermes_voice/screen/stop_timer", "device_id": "no-such-device"})
+    assert (await ws2.receive_json())["error"]["code"] == "not_supported"
+
+
+async def test_timers(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Voice timers of the followed Echo are sent with their end time; others are not."""
+    entry = await _setup(hass, aioclient_mock)
+    device_id, _ = _echo(hass, entry)
+    timer = SimpleNamespace(
+        id="t1", device_id=device_id, name="Pasta", created_seconds=300, seconds_left=290, is_active=True
+    )
+    other = SimpleNamespace(
+        id="t2", device_id="elsewhere", name="", created_seconds=60, seconds_left=50, is_active=True
+    )
+    hass.data[TIMER_DATA] = SimpleNamespace(timers={"t1": timer, "t2": other})
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/subscribe", "device_id": device_id})
+    await ws.receive_json()
+    await ws.receive_json()  # snapshot
+    event = (await ws.receive_json())["event"]
+    assert event["type"] == "timers"
+    assert [(t["id"], t["name"], t["total"], t["left"], t["active"]) for t in event["timers"]] == [
+        ("t1", "Pasta", 300, 290, True)
+    ]
+    assert event["timers"][0]["ends_at"] > 0

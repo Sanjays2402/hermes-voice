@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 import hashlib
 from pathlib import Path
 import time
@@ -23,10 +24,11 @@ from aiohttp import web
 from homeassistant.components import websocket_api
 from homeassistant.components.conversation.chat_log import async_subscribe_chat_logs
 from homeassistant.components.http import KEY_HASS, HomeAssistantView, StaticPathConfig
+from homeassistant.components.intent.const import TIMER_DATA
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 import voluptuous as vol
 
 from .client import HermesError
@@ -350,9 +352,78 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     async_subscribe_chat_logs(hass, hub.on_chat_log)
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_overview)
+    websocket_api.async_register_command(hass, ws_stop_timer)
     if SCREEN_DIR.is_dir() and getattr(hass, "http", None) is not None:
         hass.http.register_view(ScreenPageView())
         await hass.http.async_register_static_paths([StaticPathConfig(SCREEN_URL, str(SCREEN_DIR), False)])
+
+
+# What hassmic (echo-dot-assist) exposes for an Echo, by the entity's original name: mute and Do not disturb,
+# a ringing timer and its names, and a button that stops it. Other voice devices simply lack them.
+CONTROLS = {
+    ("switch", "Mute"): "mute",
+    ("switch", "Do not disturb"): "dnd",
+    ("binary_sensor", "Timer ringing"): "ringing",
+    ("sensor", "Ringing timers"): "ringing_names",
+    ("button", "Stop ringing"): "stop",
+}
+TIMER_POLL = timedelta(seconds=2)
+
+
+def device_controls(hass: HomeAssistant, device_id: str) -> dict[str, str]:
+    """role -> entity_id for a device's controls (CONTROLS)."""
+    out: dict[str, str] = {}
+    for entry in er.async_entries_for_device(er.async_get(hass), device_id):
+        role = CONTROLS.get((entry.domain, entry.original_name or ""))
+        if role:
+            out[role] = entry.entity_id
+    return out
+
+
+def device_status(hass: HomeAssistant, controls: dict[str, str]) -> dict[str, Any]:
+    """Mute, Do not disturb and a ringing timer, from the controls' states."""
+
+    def state(role: str) -> str | None:
+        st = hass.states.get(controls[role]) if role in controls else None
+        return st.state if st is not None else None
+
+    names = state("ringing_names")
+    return {
+        "mute": state("mute") == "on",
+        "dnd": state("dnd") == "on",
+        "ringing": state("ringing") == "on",
+        "ringing_names": names if names not in (None, "unknown", "unavailable") else "",
+        "can_stop": "stop" in controls,
+    }
+
+
+def device_timers(hass: HomeAssistant, device_ids: set[str | None]) -> list[dict[str, Any]]:
+    """Running and paused voice timers of these devices (Home Assistant's timer manager).
+
+    Read from ``hass.data``: the manager allows one handler per device and the Echo's integration holds it.
+    """
+    manager = hass.data.get(TIMER_DATA)
+    if manager is None:
+        return []
+    now = time.time()
+    out = []
+    for timer in list(getattr(manager, "timers", {}).values()):
+        if timer.device_id not in device_ids:
+            continue
+        left = timer.seconds_left
+        out.append(
+            {
+                "id": timer.id,
+                "device_id": timer.device_id,
+                "name": timer.name or "",
+                "total": timer.created_seconds,
+                "left": left,
+                "active": timer.is_active,
+                "ends_at": round(now + left, 1) if timer.is_active else None,
+            }
+        )
+    out.sort(key=lambda t: t["left"])
+    return out
 
 
 @websocket_api.websocket_command(
@@ -392,9 +463,41 @@ def ws_subscribe(
                 {"type": "state", "state": new.state, "device_id": device_of.get(event.data["entity_id"])}
             )
 
+    devices = {d for d in device_of.values() if d}
+    controls = {d: device_controls(hass, d) for d in devices}
+    control_device = {eid: d for d, c in controls.items() for eid in c.values()}
+
+    @callback
+    def on_control(event: Event[EventStateChangedData]) -> None:
+        dev = control_device[event.data["entity_id"]]
+        forward({"type": "device", "device_id": dev, **device_status(hass, controls[dev])})
+
+    last_timers: list[Any] = [None]  # nothing sent yet: the first poll always sends, even an empty list
+
+    @callback
+    def poll_timers(_now: Any = None) -> None:
+        timers = device_timers(hass, set(devices))
+        key = [
+            (
+                t["id"],
+                t["active"],
+                t["name"],
+                round((t["ends_at"] or 0) / 2),
+                t["left"] if not t["active"] else 0,
+            )
+            for t in timers
+        ]
+        if [key] != last_timers:
+            last_timers[:] = [key]
+            forward({"type": "timers", "timers": timers, "device_id": device_id})
+
     unsubs = [hub.async_subscribe(device_id, forward)]
     if entities:
         unsubs.append(async_track_state_change_event(hass, entities, on_state))
+    if control_device:
+        unsubs.append(async_track_state_change_event(hass, list(control_device), on_control))
+    if devices:
+        unsubs.append(async_track_time_interval(hass, poll_timers, TIMER_POLL))
 
     @callback
     def unsubscribe() -> None:
@@ -412,8 +515,26 @@ def ws_subscribe(
             "turns": turns,
             "device_id": device_id,
             "page": hub.page_version,
+            "devices": {d: device_status(hass, c) for d, c in controls.items()},
         }
     )
+    poll_timers()
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "hermes_voice/screen/stop_timer", vol.Required("device_id"): str}
+)
+@websocket_api.async_response
+async def ws_stop_timer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Stop a ringing timer on an Echo: presses its own "Stop ringing" button, nothing else."""
+    stop = device_controls(hass, msg["device_id"]).get("stop")
+    if stop is None:
+        connection.send_error(msg["id"], "not_supported", "This device has no Stop ringing button")
+        return
+    await hass.services.async_call("button", "press", {"entity_id": stop}, blocking=True)
+    connection.send_result(msg["id"])
 
 
 @websocket_api.websocket_command(

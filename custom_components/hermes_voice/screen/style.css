@@ -329,6 +329,38 @@ body[data-mode="answering"] .reply > :last-child::after {
 }
 body[data-mode="idle"] .corner-clock, body[data-mode="offline"] .corner-clock { display: none; }
 
+/* Mute, Do not disturb, timers ---------------------------------------------------------------- */
+.badges { display: flex; gap: 8px; margin-left: 6px; }
+.badge { font-size: 13px; letter-spacing: 0.06em; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.badge.mute { color: var(--error); border-color: color-mix(in srgb, var(--error) 60%, transparent); }
+body[data-muted="1"] .dot { background: var(--error); box-shadow: 0 0 12px var(--error); }
+.act.timer { color: var(--listening); }
+.context .work .countdown { font-variant-numeric: tabular-nums; }
+.ringing {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.r-title { font-size: 56px; font-weight: 300; color: var(--ink); animation: pulse 1.4s ease-in-out infinite; }
+.r-name { font-size: 26px; color: var(--ink-2); }
+.stop {
+  margin-top: 16px;
+  min-width: 260px;
+  height: 84px;
+  border-radius: 42px;
+  border: none;
+  background: var(--answering);
+  color: #1a1206;
+  font-size: 34px;
+  font-weight: 500;
+}
+
 /* Overview ---------------------------------------------------------------------------------- */
 .overview { background: var(--bg); display: flex; flex-direction: column; gap: 14px; }
 .ov-head { display: flex; align-items: center; gap: 14px; height: 40px; }
