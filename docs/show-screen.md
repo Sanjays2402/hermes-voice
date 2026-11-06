@@ -14,6 +14,9 @@ or blocked, and finished in the last 3 hours. Without any, it shows the next sch
   (default: tasks assigned to the voice profile, the agent you set up for the device), **All profiles**
   (every profile's task titles, to anyone who can see the screen), or **Off**. Or ask Hermes: the skill runs
   `ha_setup.py --profile voice --screen-activity all|profile|off`.
+- **Careful with test tasks.** A Hermes gateway with the kanban dispatcher (the voice profile's did) picks up
+  tasks in *ready* or *review* by itself and runs workers. For demos, create tasks with
+  `--initial-status blocked`, finish them with `hermes kanban complete <id> --force`, and archive them after.
 - **How.** Home Assistant cannot run `hermes` and Hermes' API has no task-board endpoint, so a small
   read-only helper runs next to Hermes: `screen_activity.py --profile voice --install` (in the skill). It
   runs `hermes kanban ... --json`, listens on 127.0.0.1:8660, accepts only the voice profile's API key, and
