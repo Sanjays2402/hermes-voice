@@ -256,3 +256,5 @@ brightness; text is at full brightness relative to the slider. *Built:* the slid
 the app (remembered by the app; down to the app's floor of 5 %); in a plain browser it dims the page with a
 CSS filter; the idle avatar is at a fixed 45 %; the page no longer resets the backlight on load (that would
 undo a bedside setting at every reload).
+
+*Confirmed by the user on the device (19:22): the slider dims the whole screen, low enough for a bedside table.*
