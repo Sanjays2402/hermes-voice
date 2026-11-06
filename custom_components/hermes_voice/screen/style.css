@@ -254,6 +254,12 @@ body[data-mode="listening"] .heard:empty::after {
 }
 body[data-mode="thinking"] .heard { font-size: 34px; color: var(--ink); -webkit-line-clamp: 3; }
 
+/* Tap to correct: while Hermes thinks or answers, a tap anywhere stops it and the Echo listens again. */
+.retry-hint { display: none; font-size: 18px; color: var(--ink-3); margin: -4px 0 12px; }
+body[data-retry="1"][data-mode="thinking"] .retry-hint,
+body[data-retry="1"][data-mode="answering"] .retry-hint { display: block; }
+body[data-retrying="1"] .retry-hint { display: block; color: var(--listening); }
+
 /* Voice bars while listening. They do not follow your voice (the Echo does not send its sound level to Home
    Assistant); each bar bounces at its own pace so together they read as speech. */
 .bars { display: none; align-items: center; gap: 9px; height: 96px; margin-top: 18px; }

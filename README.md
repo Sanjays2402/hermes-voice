@@ -58,6 +58,8 @@ On an Echo Show the home screen becomes Hermes':
 - **Listening and thinking**: your words once speech-to-text has them, and each tool as Hermes uses it
   ("Searching the web", "Reading a page").
 - **Answering**: the reply appears as it is written, while it is spoken.
+- **Tap to correct**: if it misheard you, tap the screen while it thinks or answers. It stops, says "Go
+  ahead.", and listens again without the wake word; Hermes is told what it misheard.
 - **Tap** the idle screen for an overview of scheduled jobs and recent sessions. Timer alarms get a big Stop button.
 
 **Make it yours.** The screen is one HTML page (`custom_components/hermes_voice/screen/`: `index.html`,

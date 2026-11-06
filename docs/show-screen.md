@@ -7,6 +7,16 @@ work: [Background work](#background-work); suggestions: [Next up](#next-up)). Me
 
 To remove the screen or turn parts of it off, see [what Hermes Voice changes, and how to undo each](changes-and-undo.md#the-hermes-screen).
 
+## Tap to correct
+
+While Hermes is thinking or answering, the screen shows *Misheard? Tap to say it again* under your words. A
+tap anywhere stops the turn: Home Assistant's `assist_satellite.start_conversation` cancels the running
+request (and with it the Hermes reply), the Echo says "Go ahead." and listens without the wake word. The
+next request goes to the same Hermes session as the misheard one, with a note naming what was misheard,
+so Hermes keeps the thread and ignores the wrong request. Websocket command:
+`hermes_voice/screen/retry` (`device_id`). Needs a satellite that can start conversations (echo-dot-assist's
+can); otherwise the hint is not shown and a tap opens the overview as before.
+
 ## Timers, mute and Do not disturb
 
 On an Echo with hassmic the screen shows running voice timers counting down (top of the idle lines), fills

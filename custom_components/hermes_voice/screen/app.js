@@ -43,7 +43,7 @@
     locale: undefined,
     overview: null,
     overviewAt: 0,
-    devices: {}, // device id -> {mute, dnd, ringing, ringing_names, can_stop} (hassmic's controls)
+    devices: {}, // device id -> {mute, dnd, ringing, ringing_names, can_stop, can_retry} (hassmic's controls)
     timers: [], // running and paused voice timers of the followed device(s)
   };
 
@@ -325,6 +325,7 @@
   function renderDevice() {
     const d = followed();
     body.dataset.muted = d.mute ? "1" : "0";
+    body.dataset.retry = d.can_retry ? "1" : "0";
     const badges = [];
     if (d.mute) badges.push('<span class="badge mute">Mic off</span>');
     if (d.dnd) badges.push('<span class="badge">Do not disturb</span>');
@@ -420,6 +421,10 @@
       case "local_answer":
         state.turn = { ...emptyTurn(), heard: ev.heard || "", reply: ev.text || "", phase: "done", by: "home_assistant", at: Date.now() };
         state.holdUntil = Date.now() + holdMs;
+        break;
+      case "cancelled":
+        // Tapped to correct (here or on another screen): the Echo says "Go ahead." and listens again.
+        state.turn = { ...emptyTurn(), at: Date.now() };
         break;
       case "error":
         t.phase = "error";
@@ -654,7 +659,27 @@
     $("overview").hidden = true;
     clearTimeout(overviewTimer);
   }
-  $("live").addEventListener("click", openOverview);
+  // Tap to correct: while Hermes thinks or answers, a tap stops it and the Echo listens again for the
+  // request said right. Otherwise a tap opens the overview.
+  let retrying = false;
+  function correctTurn() {
+    const dev = state.device || state.focus;
+    if (retrying || !dev) return;
+    retrying = true;
+    body.dataset.retrying = "1";
+    $("retry-hint").textContent = "Stopping\u2026";
+    if (DEMO) { onEvent({ type: "cancelled", device_id: dev }); state.satellite[dev] = "listening"; updateMode(); }
+    const done = () => {
+      retrying = false;
+      body.dataset.retrying = "0";
+      $("retry-hint").textContent = "Misheard? Tap to say it again";
+    };
+    (DEMO ? Promise.resolve() : call({ type: "hermes_voice/screen/retry", device_id: dev })).then(done, done);
+  }
+  $("live").addEventListener("click", () => {
+    if (followed().can_retry && ["thinking", "answering"].includes(state.mode)) return correctTurn();
+    openOverview();
+  });
   $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
 
   // Screen brightness, the whole screen. In the Hermes Screen app it sets the backlight (remembered by the
@@ -788,6 +813,8 @@
     state.tz = undefined;
     state.overview = demoOverview();
     const dev = "demo";
+    state.devices[dev] = { can_retry: true };
+    renderDevice();
     const reply = "Tomorrow in **Dallas**: a high near 71°F, more clouds than sun and little chance of rain. North winds 5–10 mph, low around 54. Source: [National Weather Service](https://forecast.weather.gov/).";
     const steps = [
       [2500, { type: "state", state: "listening" }],

@@ -382,6 +382,7 @@ async def test_device_status_and_stop(
         "ringing": False,
         "ringing_names": "",
         "can_stop": True,
+        "can_retry": False,
     }
     await ws.receive_json()  # the first timers event (none)
     hass.states.async_set(ids["names"], "Pasta")
@@ -425,3 +426,52 @@ async def test_timers(
         ("t1", "Pasta", 300, 290, True)
     ]
     assert event["timers"][0]["ends_at"] > 0
+
+
+async def test_tap_to_correct(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """A tap stops the turn and the Echo listens again; the next request continues the same Hermes session."""
+    entry = await _setup(hass, aioclient_mock, {CONF_STREAM: False})
+    device_id, sat = _echo(hass, entry)
+    aioclient_mock.post(CHAT, json=reply("Pencil cola is not a place."))
+    await conversation.async_converse(
+        hass, "Weather in pencil cola?", "c-1", Context(user_id="u"), agent_id=AGENT, device_id=device_id
+    )
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/retry", "device_id": device_id})
+    assert (await ws.receive_json())["error"]["code"] == "not_supported"  # no start_conversation
+
+    hass.states.async_set(sat, "responding", {"supported_features": 3})  # announce + start_conversation
+    started: list[dict[str, Any]] = []
+
+    async def start(call: Any) -> None:
+        started.append(dict(call.data))
+
+    hass.services.async_register("assist_satellite", "start_conversation", start)
+    await ws.send_json({"id": 2, "type": "hermes_voice/screen/subscribe", "device_id": device_id})
+    await ws.receive_json()
+    snapshot = (await ws.receive_json())["event"]
+    assert snapshot["devices"][device_id]["can_retry"] is True
+    await ws.receive_json()  # timers
+    await ws.send_json({"id": 3, "type": "hermes_voice/screen/retry", "device_id": device_id})
+    msgs = [await ws.receive_json() for _ in range(2)]
+    assert any(m.get("event", {}).get("type") == "cancelled" for m in msgs)
+    assert any(m.get("id") == 3 and m.get("success") for m in msgs)
+    assert started[0]["entity_id"] == sat and started[0]["start_message"] == "Go ahead."
+    assert started[0]["preannounce"] is False
+    assert "pencil cola" in started[0]["extra_system_prompt"]
+
+    # Home Assistant starts a new conversation for the corrected request; Hermes keeps the same session.
+    await conversation.async_converse(
+        hass, "Weather in Pensacola?", "c-2", Context(user_id="u"), agent_id=AGENT, device_id=device_id
+    )
+    sessions = [c[3]["X-Hermes-Session-Id"] for c in aioclient_mock.mock_calls if c[0] == "POST"]
+    assert sessions == ["ha-c-1", "ha-c-1"]
+    # Only once: a later conversation gets its own session again.
+    await conversation.async_converse(
+        hass, "And tomorrow?", "c-3", Context(user_id="u"), agent_id=AGENT, device_id=device_id
+    )
+    sessions = [c[3]["X-Hermes-Session-Id"] for c in aioclient_mock.mock_calls if c[0] == "POST"]
+    assert sessions[-1] == "ha-c-3"

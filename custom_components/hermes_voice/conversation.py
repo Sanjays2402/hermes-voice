@@ -130,6 +130,10 @@ class HermesConversationEntity(conversation.ConversationEntity):
             user_id=user_id,
             idle_reset_minutes=float(self._opt(CONF_IDLE_RESET_MINUTES)),
         )
+        if hub := async_get_hub(self.hass):
+            # After tap to correct, Home Assistant starts a new conversation: keep Hermes' thread.
+            session_id = hub.take_retry(user_input.device_id) or session_id
+            hub.sessions[user_input.device_id] = session_id
         system_parts = [self._opt(CONF_VOICE_INSTRUCTION) or ""]
         if self._opt(CONF_SEND_TIME):
             system_parts.append(time_context(dt_util.now()))

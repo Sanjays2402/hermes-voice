@@ -6,6 +6,8 @@ Home Assistant token (any user, not admin) and never the Hermes API key:
 - ``hermes_voice/screen/subscribe``: the voice device's state (idle, listening, processing, responding),
   what was heard, Hermes' reply as it is written, its tools, and the answers Home Assistant gave itself.
 - ``hermes_voice/screen/overview``: Hermes' scheduled jobs, recent sessions and gateway status.
+- ``hermes_voice/screen/retry``: tap to correct. Stops the turn on an Echo and listens again, without the
+  wake word; Hermes is told what it misheard.
 """
 
 from __future__ import annotations
@@ -22,11 +24,13 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 from homeassistant.components import websocket_api
+from homeassistant.components.assist_satellite import AssistSatelliteEntityFeature
 from homeassistant.components.conversation.chat_log import async_subscribe_chat_logs
 from homeassistant.components.http import KEY_HASS, HomeAssistantView, StaticPathConfig
 from homeassistant.components.intent.const import TIMER_DATA
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 import voluptuous as vol
@@ -48,6 +52,12 @@ SCREEN_URL = "/hermes_voice/screen"
 SCREEN_DIR = Path(__file__).parent / "screen"
 OVERVIEW_TTL = 25.0  # the screen asks about twice a minute while idle
 MAX_TEXT = 4000
+RETRY_WINDOW = 120.0  # seconds after a tap in which the next request continues the same Hermes session
+RETRY_MESSAGE = "Go ahead."  # spoken when the Echo listens again after a tap
+RETRY_PROMPT = (
+    'The user tapped "misheard" on the screen: speech-to-text got their last request wrong ("{heard}"). '
+    "What they say next is what they meant; ignore the misheard request."
+)
 # The page's files, hashed once at start: a screen that reconnects after an update reloads itself.
 PAGE_FILES = (
     "index.html",
@@ -113,6 +123,8 @@ class ScreenHub:
         self.turns: dict[str | None, Turn] = {}
         self.agent_ids: set[str] = set()  # Hermes conversation entities: their turns are reported directly
         self._heard: dict[str, str] = {}  # conversation id -> the user's last words, until an answer comes
+        self.sessions: dict[str | None, str] = {}  # device -> Hermes session of its latest turn
+        self._retry: dict[str | None, tuple[str, float]] = {}  # device -> (session to continue, when tapped)
         self._overview: dict[str, tuple[float, dict[str, Any]]] = {}
         self.page_version = ""
         self.page_html = ""
@@ -175,6 +187,22 @@ class ScreenHub:
         turn = self.turns.setdefault(device_id, Turn(at=time.time()))
         turn.reply, turn.phase = text[:MAX_TEXT], "done"
         self.publish(device_id, {"type": "reply_done", "text": turn.reply})
+
+    @callback
+    def cancelled(self, device_id: str | None) -> str:
+        """The user tapped to correct: the turn stops. Returns what was heard."""
+        turn = self.turns.setdefault(device_id, Turn(at=time.time()))
+        turn.phase = "cancelled"
+        if session := self.sessions.get(device_id):
+            self._retry[device_id] = (session, time.monotonic())
+        self.publish(device_id, {"type": "cancelled"})
+        return turn.heard
+
+    @callback
+    def take_retry(self, device_id: str | None) -> str | None:
+        """The session a corrected request continues: Home Assistant starts a new conversation for it."""
+        session, at = self._retry.pop(device_id, (None, 0.0))
+        return session if session and time.monotonic() - at < RETRY_WINDOW else None
 
     @callback
     def error(self, device_id: str | None, message: str) -> None:
@@ -362,6 +390,7 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_overview)
     websocket_api.async_register_command(hass, ws_stop_timer)
+    websocket_api.async_register_command(hass, ws_retry)
     if SCREEN_DIR.is_dir() and getattr(hass, "http", None) is not None:
         hass.http.register_view(ScreenPageView())
         await hass.http.async_register_static_paths([StaticPathConfig(SCREEN_URL, str(SCREEN_DIR), False)])
@@ -389,8 +418,18 @@ def device_controls(hass: HomeAssistant, device_id: str) -> dict[str, str]:
     return out
 
 
-def device_status(hass: HomeAssistant, controls: dict[str, str]) -> dict[str, Any]:
-    """Mute, Do not disturb and a ringing timer, from the controls' states."""
+def can_retry(hass: HomeAssistant, device_id: str | None) -> bool:
+    """Whether the device's satellite can listen again without the wake word (start_conversation)."""
+    entity = satellite_entity(hass, device_id) if device_id else None
+    st = hass.states.get(entity) if entity else None
+    features = int(st.attributes.get("supported_features") or 0) if st else 0
+    return bool(features & AssistSatelliteEntityFeature.START_CONVERSATION)
+
+
+def device_status(
+    hass: HomeAssistant, controls: dict[str, str], device_id: str | None = None
+) -> dict[str, Any]:
+    """Mute, Do not disturb and a ringing timer, from the controls' states; and tap to correct."""
 
     def state(role: str) -> str | None:
         st = hass.states.get(controls[role]) if role in controls else None
@@ -403,6 +442,7 @@ def device_status(hass: HomeAssistant, controls: dict[str, str]) -> dict[str, An
         "ringing": state("ringing") == "on",
         "ringing_names": names if names not in (None, "unknown", "unavailable") else "",
         "can_stop": "stop" in controls,
+        "can_retry": can_retry(hass, device_id),
     }
 
 
@@ -479,7 +519,7 @@ def ws_subscribe(
     @callback
     def on_control(event: Event[EventStateChangedData]) -> None:
         dev = control_device[event.data["entity_id"]]
-        forward({"type": "device", "device_id": dev, **device_status(hass, controls[dev])})
+        forward({"type": "device", "device_id": dev, **device_status(hass, controls[dev], dev)})
 
     last_timers: list[Any] = [None]  # nothing sent yet: the first poll always sends, even an empty list
 
@@ -524,7 +564,7 @@ def ws_subscribe(
             "turns": turns,
             "device_id": device_id,
             "page": hub.page_version,
-            "devices": {d: device_status(hass, c) for d, c in controls.items()},
+            "devices": {d: device_status(hass, c, d) for d, c in controls.items()},
         }
     )
     poll_timers()
@@ -543,6 +583,37 @@ async def ws_stop_timer(
         connection.send_error(msg["id"], "not_supported", "This device has no Stop ringing button")
         return
     await hass.services.async_call("button", "press", {"entity_id": stop}, blocking=True)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "hermes_voice/screen/retry", vol.Required("device_id"): str}
+)
+@websocket_api.async_response
+async def ws_retry(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Tap to correct: stop the current turn on an Echo and listen again, without the wake word.
+
+    Home Assistant's start_conversation cancels the running pipeline (and so the Hermes request), says
+    RETRY_MESSAGE and opens the microphone. The next request carries a note with what was misheard.
+    """
+    device_id = msg["device_id"]
+    entity = satellite_entity(hass, device_id)
+    if entity is None or not can_retry(hass, device_id):
+        connection.send_error(msg["id"], "not_supported", "This device cannot listen again on its own")
+        return
+    hub = async_get_hub(hass)
+    heard = hub.cancelled(device_id) if hub else ""
+    data: dict[str, Any] = {"entity_id": entity, "start_message": RETRY_MESSAGE, "preannounce": False}
+    if heard:
+        data["extra_system_prompt"] = RETRY_PROMPT.format(heard=heard.replace('"', "'")[:300])
+    try:
+        await hass.services.async_call(SATELLITE, "start_conversation", data, blocking=True)
+    except HomeAssistantError as err:  # the satellite was busy or went away: tell the screen
+        LOGGER.warning("Tap to correct failed on %s: %s", entity, err)
+        connection.send_error(msg["id"], "failed", str(err))
+        return
     connection.send_result(msg["id"])
 
 

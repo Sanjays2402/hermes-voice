@@ -9,6 +9,9 @@
 - Correct the research log: gateway plugins can add HTTP routes; named-profile routing and explicit
   authentication still need care. The current helper remains in use.
 
+- Tap to correct on the Hermes screen: while Hermes thinks or answers, a tap stops it, the Echo says "Go
+  ahead." and listens again without the wake word, and the corrected request continues the same Hermes
+  session with a note about what was misheard (`hermes_voice/screen/retry`).
 - The Hermes screen recovers from a broken update by itself: if its script fails to start (an update with a
   mistake in it), the page reloads every 30 s instead of staying frozen on "Connecting".
 - Wake word pipeline retrained on permissively licensed data only (LibriSpeech, MUSAN filtered per file,
