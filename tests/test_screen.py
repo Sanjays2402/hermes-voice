@@ -74,6 +74,7 @@ async def test_stream_turn_reaches_screen(
     snapshot = (await ws.receive_json())["event"]
     assert snapshot["type"] == "snapshot"
     assert snapshot["states"] == {device_id: "idle"}
+    assert len(snapshot["page"]) == 12  # the page's version: a screen reloads when it changes
 
     await conversation.async_converse(
         hass, "Weather?", None, Context(user_id="u"), agent_id=AGENT, device_id=device_id

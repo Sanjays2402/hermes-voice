@@ -7,6 +7,8 @@
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
   from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
+- The screen page reloads itself after an update (the snapshot carries a page version) and notices a dead
+  connection (a ping every 30 s) instead of waiting forever after Home Assistant restarts.
 - Research logs in `docs/research/`: the Echo Show 5 install and the Hermes screen, kept like a study.
 - Hermes Screen app for the Echo Show (`devices/echo/screen-app/`, step 3 of `docs/show-screen.md`): a
   full-screen WebView of the screen page, network permission only, built with `build.sh` (no Gradle),
