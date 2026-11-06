@@ -215,7 +215,10 @@ body[data-mode="error"] .turn-pane { display: flex; }
 .context .work { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .context .work + .work { margin-top: 6px; }
 .act { display: inline-block; width: 1.1em; text-align: center; margin-right: 4px; }
-.act.run { color: var(--thinking); animation: spin 2.4s linear infinite; }
+/* Running: a purple dot that pulses. Tried on the Echo Show 5 first: ◐ fell back to a tiny glyph, and
+   neither a CSS ring nor an SVG ring showed up in its WebView; ● (as for blocked) draws reliably. */
+.act.run { color: var(--thinking); animation: pulse 2.1s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .act.need { color: var(--answering); }
 .act.done { color: var(--local); }
 .ov-list .w {

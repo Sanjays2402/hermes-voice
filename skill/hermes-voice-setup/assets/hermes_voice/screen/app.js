@@ -52,11 +52,11 @@
   // -------------------------------------------------------------------------------- rendering --
   const STATUS = {
     offline: "Offline",
-    idle: "Hermes",
+    idle: "Hermes Voice",
     listening: "Listening",
     thinking: "Thinking",
     answering: "Answering",
-    done: "Hermes",
+    done: "Hermes Voice",
     error: "Something went wrong",
   };
 
@@ -242,7 +242,7 @@
     const who = (t) => (all && t.assignee ? " · " + escHtml(t.assignee) : "");
     const pick = (part) => (parts.includes(part) && act[part]) || [];
     return [
-      ...pick("running").map((t) => `<span class="act run">◐</span> <b>${escHtml(t.title)}</b>${who(t)} · ${since(t.started_at || Date.now() / 1000)}`),
+      ...pick("running").map((t) => `<span class="act run">●</span> <b>${escHtml(t.title)}</b>${who(t)} · ${since(t.started_at || Date.now() / 1000)}`),
       ...pick("attention").map((t) => `<span class="act need">●</span> ${t.status === "review" ? "Ready for your review" : "Blocked"}: <b>${escHtml(t.title)}</b>${who(t)}`),
       ...pick("recent").map((t) => `<span class="act done">✓</span> <b>${escHtml(t.title)}</b>${who(t)} · ${escHtml(relTime(t.completed_at))}`),
     ];

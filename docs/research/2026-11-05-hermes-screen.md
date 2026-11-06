@@ -258,3 +258,27 @@ CSS filter; the idle avatar is at a fixed 45 %; the page no longer resets the ba
 undo a bedside setting at every reload).
 
 *Confirmed by the user on the device (19:22): the slider dims the whole screen, low enough for a bedside table.*
+
+## 9. The running marker, and the label
+
+**Problem.** The running task's marker, the character ◐, rendered as a tiny half-moon on the Show (its font
+lacks the glyph; the fallback is small). Everything below was checked with screenshots taken over adb.
+
+| Try | Result on the Show (Chromium WebView 118) | In a desktop browser |
+|---|---|---|
+| ◐ character, spinning | tiny glyph | fine |
+| CSS ring (border with `color-mix`) | nothing | fine |
+| CSS ring (plain border colours) | nothing | fine |
+| SVG ring, spinning | nothing | fine |
+| SVG ring, not animated | nothing | fine |
+| ● character (as the blocked marker) | visible | fine |
+
+Two confounders were ruled out on the way: the page itself was current (a label change in the same deploy
+showed up), and the device log (`adb logcat`) showed no script errors. The ring's failure was not explained;
+● is what the Show demonstrably draws. *Decision:* the running marker is a purple ● that pulses (opacity, 2.1 s
+per cycle after the user asked for it 30 % slower than 1.6 s). Blocked stays an amber ●, finished a green ✓.
+
+Also learned: after a deploy, restarting the app over adb before Home Assistant was fully up could leave it
+on the previous page; restarting Home Assistant first, then the app, always gave the current page.
+
+**Label (user).** The status line top left and the overview's title say "Hermes Voice" instead of "Hermes".
