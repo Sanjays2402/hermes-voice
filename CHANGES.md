@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The Hermes screen recovers from a broken update by itself: if its script fails to start (an update with a
+  mistake in it), the page reloads every 30 s instead of staying frozen on "Connecting".
 - Wake word pipeline retrained on permissively licensed data only (LibriSpeech, MUSAN filtered per file,
   OpenSLR simulated room impulse responses, DiPCo, the LibriTTS-R Piper generator), with near-miss phrases
   as negatives, two training stages, and `pipeline.py evaluate`: misses on held-out clips clean and in

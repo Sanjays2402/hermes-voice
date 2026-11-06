@@ -75,5 +75,10 @@
 </div>
 
 <script src="app.js"></script>
+<script>
+  // A broken app.js (an update with a mistake in it) leaves the page frozen on "Connecting" with nothing
+  // left running to notice the fix. Kept apart from app.js so it runs anyway: try again every 30 s.
+  setTimeout(function () { if (!window.hermesScreenStarted) location.reload(); }, 30000);
+</script>
 </body>
 </html>

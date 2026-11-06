@@ -829,4 +829,5 @@
   loadAvatars();
   if (DEMO) runDemo();
   else connect();
+  window.hermesScreenStarted = true; // index.html reloads the page when this never happens
 })();

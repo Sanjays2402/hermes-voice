@@ -240,6 +240,8 @@ async def test_screen_page_served(
             'src="/hermes_voice/screen/app.js?v=' in page
             and 'href="/hermes_voice/screen/style.css?v=' in page
         )
+    # A broken app.js must not freeze the screen: the page reloads unless app.js says it started.
+    assert "location.reload()" in page.split("app.js?v=")[1] and "hermesScreenStarted" in page
     version = page.split("app.js?v=")[1].split('"')[0]
     assert len(version) == 12
     for asset in (f"app.js?v={version}", f"style.css?v={version}", "avatar-default.svg"):
