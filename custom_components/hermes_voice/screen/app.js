@@ -554,19 +554,22 @@
   $("live").addEventListener("click", openOverview);
   $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
 
-  // Screen brightness: only inside the Hermes Screen app on an Echo Show (it sets the window's brightness).
-  const bridge = window.HermesScreen;
-  if (bridge && bridge.setBrightness) {
-    const slider = $("brightness");
-    $("ov-bright").hidden = false;
-    try { slider.value = String(Math.round(bridge.getBrightness() * 100)); } catch { /* keep the default */ }
-    slider.addEventListener("input", () => {
-      bridge.setBrightness(Number(slider.value) / 100);
-      clearTimeout(overviewTimer);
-      overviewTimer = setTimeout(closeOverview, 90000);
-    });
-    slider.addEventListener("click", (e) => e.stopPropagation());
-  }
+  // Background brightness (the avatar behind the clock). Text stays at full brightness; the app keeps the
+  // backlight at its maximum. Remembered in this browser.
+  const slider = $("brightness");
+  const applyBackground = (pct) => document.documentElement.style.setProperty("--bg-level", String(pct / 100));
+  const savedLevel = Number(store.get("background"));
+  slider.value = String(Number.isFinite(savedLevel) && store.get("background") !== null ? savedLevel : 50);
+  applyBackground(Number(slider.value));
+  slider.addEventListener("input", () => {
+    applyBackground(Number(slider.value));
+    store.set("background", slider.value);
+    clearTimeout(overviewTimer);
+    overviewTimer = setTimeout(closeOverview, 90000);
+  });
+  slider.addEventListener("click", (e) => e.stopPropagation());
+  // Inside the Hermes Screen app: keep the backlight at its maximum (an earlier slider lowered it).
+  try { if (window.HermesScreen) window.HermesScreen.setBrightness(1); } catch { /* not in the app */ }
 
   // ----------------------------------------------------------------------------------- avatar --
   // <config>/www/hermes_voice/avatar.(svg|png|webp|jpg|gif) replaces the default; avatar-<state>.* per state.

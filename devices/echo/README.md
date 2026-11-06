@@ -341,8 +341,9 @@ hermes_voice serves at `/hermes_voice/screen`.
 **Updating the app**: debug access again, then `adb install -r build/hermes-screen.apk` (signed with the same
 key as the installed one; keep `build/screen.keystore`). The app clears its page cache on every start, and
 the page reloads itself after an update of the integration. **Brightness**: hassmic does not set the
-screen's brightness while another app is in front; the app starts at full brightness, and the overview
-(tap the idle screen) has a slider.
+screen's brightness while another app is in front; the app keeps the backlight at full. The Echo Show 5's
+panel is dim even then, so the text is white and the overview (tap the idle screen) has a slider for the
+background's brightness.
 
 To go back: pick the face on the Screen page; `adb uninstall org.hermesvoice.screen` removes the app.
 
