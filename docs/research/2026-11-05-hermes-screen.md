@@ -233,3 +233,18 @@ task lines (screenshot taken over adb).
 screen's brightness while another app is in front. App 0.2 sets its window to full brightness by default and
 gives the page a bridge (`HermesScreen.setBrightness`, `getBrightness`, remembered by the app); the overview
 shows a brightness slider only inside the app.
+
+**Brightness, measured (19:10).** Over adb: `mScreenBrightnessOverrideFromWindowManager=255`, and
+`/sys/class/leds/lcd-backlight/brightness` 255 of `max_brightness` 255. The app's full brightness had taken
+effect; the panel is simply not bright. What looked dim was the page: a near-black background, the avatar at
+34 % behind the clock, grey secondary text.
+
+**Iterations with the user, on the device.** A brighter page (lighter background, avatar at 62 %) washed out
+the idle text; halfway between was tried next. The user's call: **text always at full brightness; the slider
+adjusts only the background** (the avatar behind the clock, 10 % to 85 % opacity, default in the middle),
+remembered by the page; the backlight stays at its maximum (the page resets the app to full, since the earlier
+slider could have lowered it). Confirmed on the device by screenshot.
+
+**Auto-reload confirmed on the device.** Each of these steps was deployed by copying the page and restarting
+Home Assistant; the Show reloaded the new page by itself within about a minute every time (section 6), with no
+adb and no power cycle.

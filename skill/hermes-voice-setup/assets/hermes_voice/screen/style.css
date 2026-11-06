@@ -4,9 +4,12 @@
 :root {
   --bg: #07080c;
   --bg-2: #10131b;
-  --ink: #eef1f7;
-  --ink-2: #a4acbd;
-  --ink-3: #636b7d;
+  /* Text at full brightness: the Echo Show 5's panel is dim even at full backlight. */
+  --ink: #ffffff;
+  --ink-2: #e2e6ee;
+  --ink-3: #aab2c2;
+  /* How bright the background (the avatar behind the clock) is, 0 to 1: the overview's slider. */
+  --bg-level: 0.5;
   --line: #222838;
   --idle: #8f9bb3;
   --listening: #43d9e6;
@@ -95,7 +98,7 @@ body[data-mode="offline"] .avatar-wrap { transform: var(--zoom, none); }
 body[data-mode="idle"] .ring, body[data-mode="idle"] .halo,
 body[data-mode="offline"] .ring, body[data-mode="offline"] .halo { opacity: 0; animation: none; }
 body[data-mode="idle"] .avatar {
-  opacity: 0.34;
+  opacity: calc(0.1 + var(--bg-level) * 0.75);
   background: linear-gradient(160deg, #ffffff 40%, var(--idle) 140%);
   animation: drift 24s ease-in-out infinite alternate;
 }
