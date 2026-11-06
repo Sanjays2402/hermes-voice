@@ -43,6 +43,8 @@
     locale: undefined,
     overview: null,
     overviewAt: 0,
+    devices: {}, // device id -> {mute, dnd, ringing, ringing_names, can_stop} (hassmic's controls)
+    timers: [], // running and paused voice timers of the followed device(s)
   };
 
   function emptyTurn() {
@@ -248,10 +250,26 @@
     ];
   }
 
-  /** The idle screen's lines: background work, else the next scheduled job, else nothing. */
+  /** "4:32", "1:02:05" */
+  function clock(sec) {
+    const s = Math.max(0, Math.round(sec));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(r).padStart(2, "0");
+  }
+
+  /** Voice timers first (they are about now), counting down. */
+  function timerItems() {
+    return state.timers.map((t) => {
+      const left = t.active && t.ends_at ? t.ends_at - Date.now() / 1000 : t.left;
+      const name = t.name ? escHtml(t.name) + " timer" : "Timer";
+      return `<span class="act timer">●</span> <b class="countdown">${clock(left)}</b> ${name}${t.active ? "" : " · paused"}`;
+    });
+  }
+
+  /** The idle screen's lines: timers, background work, else the next scheduled job, else nothing. */
   function contextLine() {
     const esc = escHtml;
-    const work = workItems();
+    const work = [...timerItems(), ...workItems()];
     if (work.length) return work.slice(0, 3).map((w) => `<div class="work">${w}</div>`).join("");
     const jobs = (state.overview && state.overview.jobs) || [];
     const next = jobs
@@ -262,6 +280,37 @@
     return "";
   }
 
+  // ------------------------------------------------------- mute, do not disturb, ringing timer --
+  function followed() {
+    return state.devices[state.device || state.focus] || Object.values(state.devices)[0] || {};
+  }
+
+  function renderDevice() {
+    const d = followed();
+    body.dataset.muted = d.mute ? "1" : "0";
+    const badges = [];
+    if (d.mute) badges.push('<span class="badge mute">Mic off</span>');
+    if (d.dnd) badges.push('<span class="badge">Do not disturb</span>');
+    $("badges").innerHTML = badges.join("");
+    // A ringing timer covers everything, with a Stop button (hassmic's own "Stop ringing").
+    const ringingDev = Object.keys(state.devices).find((id) => state.devices[id].ringing && (!state.device || id === state.device));
+    const ringing = ringingDev !== undefined;
+    $("ringing").hidden = !ringing;
+    if (ringing) {
+      const names = state.devices[ringingDev].ringing_names;
+      $("ringing-name").textContent = names ? names : "";
+      $("stop-timer").dataset.device = ringingDev;
+      $("stop-timer").hidden = !state.devices[ringingDev].can_stop;
+    }
+  }
+
+  $("stop-timer").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.device;
+    if (DEMO) { state.devices[id] = { ...state.devices[id], ringing: false }; return renderDevice(); }
+    call({ type: "hermes_voice/screen/stop_timer", device_id: id }).catch(() => {});
+  });
+
   // ---------------------------------------------------------------------------- feed handling --
   function onEvent(ev) {
     const dev = ev.device_id === undefined ? null : ev.device_id;
@@ -269,6 +318,8 @@
       // Home Assistant came back with a different page (an update): load it. The first snapshot sets it.
       if (ev.page && state.page && ev.page !== state.page) return location.reload();
       state.page = state.page || ev.page;
+      Object.assign(state.devices, ev.devices || {});
+      renderDevice();
       Object.assign(state.satellite, ev.states || {});
       const turns = ev.turns || {};
       const key = state.device || latestDevice(turns);
@@ -280,6 +331,14 @@
       }
       renderTurn();
       return updateMode();
+    }
+    if (ev.type === "device") {
+      state.devices[dev] = ev;
+      return renderDevice();
+    }
+    if (ev.type === "timers") {
+      state.timers = (ev.timers || []).filter((t) => !state.device || t.device_id === state.device);
+      return tick();
     }
     if (ev.type === "state") {
       state.satellite[dev] = ev.state;

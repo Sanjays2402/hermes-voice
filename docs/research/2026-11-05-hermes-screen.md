@@ -282,3 +282,33 @@ Also learned: after a deploy, restarting the app over adb before Home Assistant 
 on the previous page; restarting Home Assistant first, then the app, always gave the current page.
 
 **Label (user).** The status line top left and the overview's title say "Hermes Voice" instead of "Hermes".
+
+## 10. Timers, mute and Do not disturb
+
+**Gap.** hassmic's own face shows a Stop button while a timer rings, mute and Do not disturb; the agent
+screen showed none of them.
+
+**Evidence.** hassmic exposes, per Echo, entities with fixed original names (checked in the entity registry):
+`switch` "Mute", `switch` "Do not disturb", `binary_sensor` "Timer ringing", `sensor` "Ringing timers" (the
+names), `button` "Stop ringing". Running voice timers live in Home Assistant's timer manager
+(`hass.data["intent.timer"]`, `TimerInfo`: id, name, seconds, `seconds_left`, `created_seconds`,
+`is_active`, `device_id`); it allows one handler per device, and the Echo's integration holds it, so the
+screen reads the manager every 2 s instead (semi-private; noted as a risk).
+
+**Built.** The subscribe feed sends each followed Echo's mute, Do not disturb, ringing timer and its names
+(snapshot and `device` events), and its running and paused timers with an end time (`timers` events, always
+one at the start). A new command `hermes_voice/screen/stop_timer` presses only that Echo's "Stop ringing"
+button. The page: timers count down at the top of the idle lines; a ringing timer covers the screen with
+"Timer done", its name and a large Stop button; "Mic off" (red) and "Do not disturb" badges next to the
+label, and the status dot turns red when muted.
+
+**Tested.** 3 new tests and 4 updated (100 in all). Live, with timers set on the Show through Home Assistant's
+own handler (`conversation/process`, agent `conversation.home_assistant`, the Show's device id; no Hermes
+call): the countdown ticked on the page; at zero the page showed "Timer done · 20 s" and Stop; Stop pressed
+the Show's button and the ringing ended within 10 ms (history: `timer_ringing` on 02:28:45.77, Stop pressed
+02:28:57.02, off 02:28:57.03 UTC). An earlier 25 s timer was also stopped through the button, 10 s into
+ringing, apparently from the Show itself.
+
+**Found on the way.** The first test run hung for 10 minutes: the first `timers` message was not sent when
+there were no timers (an empty list compared equal to "nothing sent yet"), and a test waited for it forever.
+The feed now always sends the first list, and `tests/run.sh` gives each test 60 s (`--timeout 60`).

@@ -17,7 +17,7 @@
       <div class="avatar" id="avatar"></div>
     </div>
     <div class="content">
-      <div class="status-line"><span class="dot"></span><span id="status">Connecting</span></div>
+      <div class="status-line"><span class="dot"></span><span id="status">Connecting</span><span class="badges" id="badges"></span></div>
 
       <div class="pane idle-pane" id="idle">
         <div class="clock" id="clock">--:--</div>
@@ -61,6 +61,12 @@
     </section>
   </div>
 </section>
+
+<div class="ringing" id="ringing" hidden>
+  <div class="r-title">Timer done</div>
+  <div class="r-name" id="ringing-name"></div>
+  <button class="stop" id="stop-timer">Stop</button>
+</div>
 
 <div class="setup" id="setup" hidden>
   <h1>Hermes screen</h1>
