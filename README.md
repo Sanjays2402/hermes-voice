@@ -3,6 +3,10 @@
 Talk to one of your [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles out loud, through
 Home Assistant Assist, on an old Amazon Echo running echo-dot-assist.
 
+On an Echo Show, the screen follows along: what it heard, the answer as it is written, the tools Hermes is
+using, and, when idle, what it is working on in the background. The screen is a web page, so you can make
+it your own ([The Hermes screen](#the-hermes-screen-echo-show)).
+
 [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) replaces the Alexa client while
 keeping Fire OS and the Echo's audio processing. Hermes Voice runs on the Home Assistant and Hermes
 hosts. It connects Assist to a Hermes profile once the Echo has been set up as an Assist satellite.
@@ -22,6 +26,7 @@ This repo adds only the missing pieces:
 | Piece | What it does |
 |---|---|
 | `custom_components/hermes_voice` | Home Assistant conversation agent that sends each turn to a Hermes profile with a stable `X-Hermes-Session-Id`, so Hermes keeps the conversation. Streams the reply so speech starts early, cleans it for speech, and speaks a short fallback instead of error text. |
+| `custom_components/hermes_voice/screen`, `devices/echo/screen-app` | The Hermes screen: a page Home Assistant serves with the conversation as it happens, and a small Android app that shows it full screen on an Echo Show. |
 | `skill/hermes-voice-setup` | A Hermes skill: your own agent prepares a voice profile, installs/configures Home Assistant + hermes_voice, and verifies it. |
 | `docs/changes-and-undo.md` | Everything Hermes Voice changes in Home Assistant, Hermes and on the Echo, and how to undo each. |
 | `docs/voice-profile.md` | How to set up a dedicated voice profile by hand (SOUL.md, tools, thinking effort, separate provider). |
@@ -43,6 +48,26 @@ Everything else is existing open-source work, used as-is; see [CREDITS.md](CREDI
   adds one short "answer briefly, for speech" system message (configurable).
 - **No Home Assistant device control in v0.1.** Hermes gets no HA tools from this integration. To let the
   agent control devices, give the profile Home Assistant's MCP server.
+
+## The Hermes screen (Echo Show)
+
+On an Echo Show the home screen becomes Hermes':
+
+- **Idle**: the avatar, the time, running timers, and Hermes' background work: tasks running, waiting for
+  review or blocked, the next scheduled job, and (opt-in) a short "next up" suggestion.
+- **Listening and thinking**: your words once speech-to-text has them, and each tool as Hermes uses it
+  ("Searching the web", "Reading a page").
+- **Answering**: the reply appears as it is written, while it is spoken.
+- **Tap** the idle screen for an overview of scheduled jobs and recent sessions. Timer alarms get a big Stop button.
+
+**Make it yours.** The screen is one HTML page (`custom_components/hermes_voice/screen/`: `index.html`,
+`style.css`, `app.js`) that gets a live feed of events from Home Assistant over its websocket: listening,
+thinking, each part of the reply, tool calls, timers, background work. Swap the avatar by dropping a picture
+in Home Assistant's `www/hermes_voice/` folder, restyle it, or build something else on the same feed. Open
+`/hermes_voice/screen?demo` in a desktop browser to work on it without an Echo.
+
+Set up: [devices/echo/README.md](devices/echo/README.md#hermes-screen-on-an-echo-show). Design, options and
+the feed: [docs/show-screen.md](docs/show-screen.md).
 
 ## What you need
 

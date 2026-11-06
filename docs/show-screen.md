@@ -1,4 +1,4 @@
-# Hermes screen for the Echo Show (design)
+# Hermes screen for the Echo Show
 
 Status: steps 1–4 are built and run on an Echo Show 5 as its home screen (the feed, the page, the app:
 install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-screen-on-an-echo-show); background
