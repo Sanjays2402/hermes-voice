@@ -211,6 +211,17 @@ async def test_error_after_text_keeps_text(hass: HomeAssistant, aioclient_mock: 
     assert _assistant_text(hass, await _say(hass)) == f"Checking now. {DEFAULT_FALLBACK_MESSAGE}"
 
 
+async def test_length_after_text_keeps_text(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    """A reply cut off by max tokens keeps the text already spoken; no fallback."""
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.post(
+        CHAT,
+        text=stream(chunk("Checking now. "), chunk(finish="length")),
+        headers=SSE,
+    )
+    assert _assistant_text(hass, await _say(hass)) == "Checking now."
+
+
 async def test_stream_option_off_uses_json(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
     """With streaming off the request asks for one JSON reply."""
     await _setup(hass, aioclient_mock, {CONF_STREAM: False})
