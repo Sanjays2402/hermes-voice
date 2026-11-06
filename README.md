@@ -23,6 +23,7 @@ This repo adds only the missing pieces:
 |---|---|
 | `custom_components/hermes_voice` | Home Assistant conversation agent that sends each turn to a Hermes profile with a stable `X-Hermes-Session-Id`, so Hermes keeps the conversation. Streams the reply so speech starts early, cleans it for speech, and speaks a short fallback instead of error text. |
 | `skill/hermes-voice-setup` | A Hermes skill: your own agent prepares a voice profile, installs/configures Home Assistant + hermes_voice, and verifies it. |
+| `docs/changes-and-undo.md` | Everything Hermes Voice changes in Home Assistant, Hermes and on the Echo, and how to undo each. |
 | `docs/voice-profile.md` | How to set up a dedicated voice profile by hand (SOUL.md, tools, thinking effort, separate provider). |
 | `wakeword/` | Reproducible pipeline that trains a "hey hermes" microWakeWord model, plus the trained model (`wakeword/model/`). |
 
@@ -143,7 +144,7 @@ tools/build_release.sh         # release files in dist/ (integration zip, skill 
 ```
 
 Docs: [architecture](docs/architecture.md) · [voice profile](docs/voice-profile.md) ·
-[troubleshooting](docs/troubleshooting.md) · [decisions](DECISIONS.md)
+[troubleshooting](docs/troubleshooting.md) · [what it changes, and undo](docs/changes-and-undo.md) · [decisions](DECISIONS.md)
 
 ## License
 

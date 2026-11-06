@@ -345,7 +345,8 @@ screen's brightness while another app is in front; the app does, starting at ful
 idle screen) has a slider that dims the whole screen, remembered by the app (down to 5 %, for a bedside
 table).
 
-To go back: pick the face on the Screen page; `adb uninstall org.hermesvoice.screen` removes the app.
+To go back: pick the face on the Screen page; `adb uninstall org.hermesvoice.screen` removes the app. Everything
+else Hermes Voice changes, and its undo: [docs/changes-and-undo.md](../../docs/changes-and-undo.md).
 
 ## Wake word: "Hey Hermes"
 

@@ -249,3 +249,13 @@ async def test_sentences_end_with_blank_line(
         c.content for c in _log(hass, result) if isinstance(c, conversation.AssistantContent) and c.content
     ]
     assert "".join(texts) == "One.\n\nTwo.\n\n"
+
+
+async def test_name_swap_option(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    """Spoken replies avoid the assistant's name by default; the option turns that off."""
+    entry = await _setup(hass, aioclient_mock)
+    aioclient_mock.post(CHAT, text=stream(chunk("Hermes is ready. "), chunk(finish="stop")), headers=SSE)
+    assert _speech(await _say(hass)) == "The agent is ready."
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "avoid_name": False})
+    await hass.async_block_till_done()
+    assert _speech(await _say(hass)) == "Hermes is ready."

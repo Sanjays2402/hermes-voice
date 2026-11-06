@@ -33,6 +33,7 @@ from .const import (
     ACTIVITY_SCOPES,
     CONF_ACTIVITY_PORT,
     CONF_API_KEY,
+    CONF_AVOID_NAME,
     CONF_BASE_URL,
     CONF_DISPLAY_NAME,
     CONF_FALLBACK_MESSAGE,
@@ -191,6 +192,7 @@ class HermesVoiceOptionsFlow(OptionsFlowWithReload):
                 vol.Optional(CONF_STREAM, default=True): BooleanSelector(),
                 vol.Optional(CONF_WORKING_PHRASE, default=""): str,
                 vol.Optional(CONF_SEND_TIME, default=True): BooleanSelector(),
+                vol.Optional(CONF_AVOID_NAME, default=True): BooleanSelector(),
                 vol.Optional(CONF_SCREEN_ACTIVITY, default=DEFAULT_SCREEN_ACTIVITY): SelectSelector(
                     SelectSelectorConfig(
                         options=ACTIVITY_SCOPES,

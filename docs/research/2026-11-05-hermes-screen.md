@@ -350,7 +350,16 @@ Findings:
   be primed without switching to a Whisper model.
 - **The speaker woke itself** mid-reply, saying "the latest Hermes Agent release": microWakeWord on the Echo
   keeps listening while it speaks (echo-dot-assist's guide lists this). Spoken text now swaps the name and
-  the persona says "I".
+  the persona says "I". Muting the mic while it speaks was considered and rejected: it would end barge-in
+  ("Hey Hermes, stop") and needs a change on the Echo. *Result:* with both changes the user reported the
+  persona "worked well". The swap is an option (*Don't say the name aloud*, on by default) for anyone using
+  another wake word.
 - **Fast, jumbled playback** of the first sentence or two happens now and then (the user: perhaps one in twenty
   replies; seen on the Dot before these changes). Not reproduced on demand; to be traced from the pipeline
   record of the next occurrence.
+
+## 13. What changes, and how to undo it
+
+Every change Hermes Voice makes (Home Assistant options and settings, the voice profile, the helper, the
+Echo, the screen app) is listed with its undo in [changes-and-undo.md](../changes-and-undo.md), also
+shipped in the skill so an agent can read it before removing anything.

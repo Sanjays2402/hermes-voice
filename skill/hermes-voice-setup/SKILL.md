@@ -40,6 +40,7 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 | Background work on an Echo Show's screen | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --install` |
 | Show every profile's work (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --screen-activity all` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
+| What it changes, and how to undo each (read before removing anything) | `${HERMES_SKILL_DIR}/references/changes-and-undo.md` |
 
 ## Ground rules
 

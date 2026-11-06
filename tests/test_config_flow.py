@@ -156,6 +156,7 @@ async def test_options_flow(hass: HomeAssistant, mock_models: AiohttpClientMocke
             "working_phrase": "Hang on.",
             "send_time": False,
             "screen_activity": "all",
+            "avoid_name": False,
         },
     )
     assert r["type"] is FlowResultType.CREATE_ENTRY
@@ -168,6 +169,7 @@ async def test_options_flow(hass: HomeAssistant, mock_models: AiohttpClientMocke
     assert entry.options["working_phrase"] == "Hang on."
     assert entry.options["send_time"] is False
     assert entry.options["screen_activity"] == "all"
+    assert entry.options["avoid_name"] is False
 
 
 async def test_reauth(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:

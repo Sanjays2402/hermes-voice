@@ -18,6 +18,7 @@ from . import HermesConfigEntry
 from .cleanup import VoiceChunker, clean_for_voice
 from .client import HermesError, HermesRateLimitError, HermesTimeoutError, TextDelta, ToolEvent
 from .const import (
+    CONF_AVOID_NAME,
     CONF_DISPLAY_NAME,
     CONF_FALLBACK_MESSAGE,
     CONF_IDLE_RESET_MINUTES,
@@ -159,7 +160,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
             screen.delta(reply.text)
             text = reply.text
             if self._opt(CONF_VOICE_CLEANUP):
-                text = clean_for_voice(text) or text.strip()
+                text = clean_for_voice(text, bool(self._opt(CONF_AVOID_NAME))) or text.strip()
         except HermesError as err:
             self._log_failure(err, session_id)
             screen.error(err)
@@ -191,7 +192,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
         the Assist pipeline start text-to-speech right away instead of after the whole reply.
         """
         whole_sentences = bool(self._opt(CONF_VOICE_CLEANUP))  # the chunker hands on whole sentences
-        chunker = VoiceChunker(whole_sentences)
+        chunker = VoiceChunker(whole_sentences, bool(self._opt(CONF_AVOID_NAME)))
         working_phrase = (self._opt(CONF_WORKING_PHRASE) or "").strip()
         role: str = "assistant"
         said_anything = False  # in this whole turn

@@ -23,6 +23,7 @@ CONF_TIMEOUT: Final = "timeout"
 CONF_STREAM: Final = "stream"
 CONF_WORKING_PHRASE: Final = "working_phrase"
 CONF_SEND_TIME: Final = "send_time"
+CONF_AVOID_NAME: Final = "avoid_name"
 CONF_SCREEN_ACTIVITY: Final = "screen_activity"
 CONF_ACTIVITY_PORT: Final = "activity_port"
 
@@ -52,6 +53,8 @@ DEFAULT_STREAM: Final = True
 DEFAULT_WORKING_PHRASE: Final = "One moment."
 # Hermes has no clock: tell it Home Assistant's local date and time on every turn.
 DEFAULT_SEND_TIME: Final = True
+# Replies do not say the assistant's name aloud: an Echo with microWakeWord hears itself and wakes.
+DEFAULT_AVOID_NAME: Final = True
 DEFAULT_SCREEN_ACTIVITY: Final = ACTIVITY_PROFILE
 DEFAULT_ACTIVITY_PORT: Final = 8660
 
@@ -66,6 +69,7 @@ DEFAULT_OPTIONS: Final = {
     CONF_STREAM: DEFAULT_STREAM,
     CONF_WORKING_PHRASE: DEFAULT_WORKING_PHRASE,
     CONF_SEND_TIME: DEFAULT_SEND_TIME,
+    CONF_AVOID_NAME: DEFAULT_AVOID_NAME,
     CONF_SCREEN_ACTIVITY: DEFAULT_SCREEN_ACTIVITY,
     CONF_ACTIVITY_PORT: DEFAULT_ACTIVITY_PORT,
 }

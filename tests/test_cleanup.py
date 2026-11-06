@@ -57,3 +57,7 @@ def test_only_code_returns_empty() -> None:
 def test_wake_word_not_spoken(text: str, spoken: str) -> None:
     """The speaker must not say its own wake word: it would wake itself (microWakeWord on an Echo)."""
     assert clean_for_voice(text) == spoken
+
+
+def test_name_swap_can_be_off() -> None:
+    assert clean_for_voice("Hermes is ready.", unsay_name=False) == "Hermes is ready."

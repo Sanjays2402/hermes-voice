@@ -37,7 +37,7 @@ def _table_row(line: str) -> str | None:
     return None
 
 
-def clean_for_voice(text: str) -> str:
+def clean_for_voice(text: str, unsay_name: bool = True) -> str:
     """Strip markdown, code, URLs, emoji and tables; collapse whitespace.
 
     Code blocks are dropped (they cannot be read aloud). URLs become the word "link"
@@ -84,7 +84,7 @@ def clean_for_voice(text: str) -> str:
     text = _SPACES.sub(" ", text)
     text = re.sub(r"\s+([.,!?;:])", r"\1", text)
     text = re.sub(r"([.!?])\.+", r"\1", text)
-    return unsay_wake_word(text.strip())
+    return unsay_wake_word(text.strip()) if unsay_name else text.strip()
 
 
 # The wake word's name, said aloud by the speaker itself, wakes it: microWakeWord on an Echo (echo-dot-assist)
@@ -133,14 +133,14 @@ class VoiceChunker:
     text is passed on unchanged as it arrives.
     """
 
-    def __init__(self, cleanup: bool) -> None:
+    def __init__(self, cleanup: bool, unsay_name: bool = True) -> None:
         """Initialize."""
         self._cleanup = cleanup
+        self._unsay_name = unsay_name
         self._buf = ""
 
-    @staticmethod
-    def _emit(text: str) -> str:
-        cleaned = clean_for_voice(text)
+    def _emit(self, text: str) -> str:
+        cleaned = clean_for_voice(text, self._unsay_name)
         if cleaned and text.rstrip(" \t").endswith("\n") and cleaned[-1] not in ".!?:;,":
             cleaned += "."  # a heading or list item before a paragraph break
         return cleaned

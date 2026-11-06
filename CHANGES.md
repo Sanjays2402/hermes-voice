@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New page `docs/changes-and-undo.md`: everything Hermes Voice changes in Home Assistant, Hermes and on the
+  Echo, and how to undo each.
 - Background work on the Hermes screen (`docs/show-screen.md`, step 4): the idle screen shows Hermes' tasks
   that are running, ready for review or blocked, and that finished in the last 3 hours, instead of the last
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
@@ -9,7 +11,7 @@
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
 - The speaker no longer says its own name: spoken text swaps "Hermes" ("the latest Hermes Agent release" is
   said as "the latest agent release"), and the voice persona says "I". microWakeWord on an Echo keeps listening
-  while the Echo speaks, and an Echo Show 5 woke itself mid-reply. The screen keeps the real text.
+  while the Echo speaks, and an Echo Show 5 woke itself mid-reply. The screen keeps the real text. New option *Don't say the name aloud* (on by default) turns the swap off.
 - Faster spoken replies: every sentence handed to text-to-speech ends with a blank line, so Piper speaks it at
   once (its sentence splitter otherwise waits for the next sentence to start, which put speech a sentence or
   two behind and kept the working phrase silent until the tool returned). The voice persona asks for a first

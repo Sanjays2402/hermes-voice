@@ -5,6 +5,8 @@ install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-scree
 work: [Background work](#background-work)). Memories and suggestions are not built. The research record is
 [docs/research/2026-11-05-hermes-screen.md](research/2026-11-05-hermes-screen.md).
 
+To remove the screen or turn parts of it off, see [what Hermes Voice changes, and how to undo each](changes-and-undo.md#the-hermes-screen).
+
 ## Timers, mute and Do not disturb
 
 On an Echo with hassmic the screen shows running voice timers counting down (top of the idle lines), fills
