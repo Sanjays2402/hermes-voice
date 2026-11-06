@@ -5,63 +5,76 @@ A reproducible pipeline that trains a [microWakeWord](https://github.com/kahrend
 ESPHome-format manifest `model/hey_hermes.json` (micro_wake_word v2).
 
 It follows microWakeWord's own `notebooks/basic_training_notebook.ipynb` (commit `4665173`) as a script with
-resumable stages. Upstream code is downloaded at the pinned commits at run time; none of it is copied here.
+resumable stages, and trains **only on data whose license allows any use** (below), so the model can be
+MIT like the code. Upstream code is downloaded at the pinned commits at run time; none of it is copied here.
+
+> **Status (2026-11-06):** the pipeline trains on permissive data. The bundled `model/hey_hermes.tflite` is
+> still the first model (non-commercial, see `model/MODEL_NOTICE.md`) until the new one has been tested with
+> real voices on an Echo. Evidence and numbers: [the research log](../docs/research/2026-11-06-wake-word-permissive.md).
 
 ## Run it
 
 ```bash
 # macOS (Apple Silicon) or Linux; Python 3.10-3.12 built with lzma
 uv python install 3.11                       # if your Python lacks lzma (pyenv builds without xz do)
-PYTHON=$(uv python find 3.11) wakeword/train.sh --samples 3000 --steps 10000
+PYTHON=$(uv python find --python-preference only-managed 3.11) wakeword/train.sh
 ```
 
-Train on a Linux + NVIDIA box over SSH and copy the result back:
+On a Linux + NVIDIA box over SSH, copying the model back: `wakeword/remote_linux_cuda.sh user@gpu-box`.
 
-```bash
-wakeword/remote_linux_cuda.sh user@gpu-box
-```
+Stages (each skips finished work, so re-running resumes): `download` → `generate` → `prepare` →
+`features` → `train` → `evaluate` → `export`. Run one with `.venv/bin/python wakeword/pipeline.py <stage>`.
 
-Stages (each skips finished work, so re-running resumes): `generate` → `augdata` → `negatives` →
-`features` → `train` → `export`. Run one with `.venv/bin/python wakeword/pipeline.py <stage>`.
-`pipeline.py probe` does a tiny end-to-end run to check the setup and measure speed.
+Time on a Mac Studio (M1 Max, CPU): downloads depend on the mirror (31 GB); clip generation about 5 min;
+unpacking and sorting about 10 min; features about 75 min (speech runs as 4 processes); training about
+8 min (20,000 steps); evaluation about 5 min. Disk: about 75 GB under `wakeword/work/` (git-ignored).
 
-Disk: about 30 GB under `wakeword/work/` (negative features are 5.7 GB zipped, ~25 GB unpacked, plus augmentation audio and generated features).
-`work/` and `.venv/` are git-ignored.
+## Data, and why each is allowed
 
-## Pinned inputs
+| Data | License | Used for |
+|---|---|---|
+| [LibriSpeech](https://www.openslr.org/12/) train-clean-100, dev-other | CC BY 4.0 | speech the model must ignore (8,000 utterances) |
+| [MUSAN](https://www.openslr.org/17/) noise and music | per file: only CC BY, CC0, public domain | noise and music to ignore, and as background |
+| [OpenSLR 28](https://www.openslr.org/28/) simulated room impulse responses | Apache 2.0 | room echo (the recorded ones come from other databases: not used) |
+| [DiPCo](https://zenodo.org/record/8122551) dinner party corpus | CDLA-Permissive-1.0 | party chatter; its eval sessions only for the test |
+| Piper LibriTTS-R generator (`rhasspy/piper-checkpoints`, trained from scratch on LibriTTS-R) | MIT, data CC BY 4.0 | "hey hermes" clips and near misses |
+| [microWakeWord](https://github.com/kahrendt/microWakeWord) @ `4665173` | Apache 2.0 | training code |
 
-| Input | Pin |
-|---|---|
-| microWakeWord | `kahrendt/microWakeWord@4665173cd35f1cff9a61e06fc427f124766c488e` (installed editable: its `find_packages()` misses `microwakeword/audio`) |
-| piper-sample-generator | `rhasspy/piper-sample-generator@2971426a55072f7d22fec416ca7800df8bd23207` source on `PYTHONPATH` (the PyPI wheel omits `piper_train/`, needed by the LibriTTS-R generator) |
-| Generator model | `en_US-libritts_r-medium.pt` from piper-sample-generator release v2.0.0 |
-| Python packages | `requirements.txt`; resolved versions in `requirements.lock.<os>-<arch>.txt` |
-| Negative features | `kahrendt/microwakeword@0da95f9` on Hugging Face: `speech`, `dinner_party`, `no_speech`, `dinner_party_eval` |
-| Augmentation audio | `davidscripka/MIT_environmental_impulse_responses@b824a1e`, `agkphysics/AudioSet@0c609e8` shard `data/bal_train/09.parquet`, `mchl914/fma_xsmall@bfef24f` |
+MUSAN mixes licenses inside the corpus. `prepare` reads its `LICENSE` files and keeps a file only under CC
+BY, CC0, public domain or US government; NonCommercial, NoDerivatives and ShareAlike (which could reach the
+model) are left out, and so is anything unclear. Each decision is in `work/permissive/sets/musan_licenses.tsv`.
 
-Differences from the upstream notebook (all forced by current package versions; see DECISIONS.md):
-`python -m piper_sample_generator` instead of the removed root `generate_samples.py`; `pymicro-features` 2.0.2
-from PyPI on every OS (the notebook's macOS fork has an older API); `audiomentations` 0.43.1 (0.33 lacks
-`AddColorNoise`); `tensorboard` added (TensorFlow 2.21 no longer installs it); AudioSet read from a parquet shard (the notebook's `bal_train09.tar` is gone); 3000 positive samples
-from "hey hermes" plus two phonetic spellings instead of 1000.
+## The test
 
-## Hardware notes
+`evaluate` checks the streaming quantized model, fed the way a device feeds it, on audio it never trained
+on: held-out "hey hermes" clips (clean and mixed with noise at 10, 5 and 0 dB), 2.6 h of dinner party, 2.6 h
+of noise and music, and held-out near-miss phrases ("hey hermit", "hey thermos", ...). `--model` runs it on
+any other `.tflite`, so models can be compared on the same audio. Results go to `work/permissive/evaluation-<run>.json`.
 
-- Measured on a Mac Studio (M1 Max, CPU only, TensorFlow 2.21): 3000 clips generated in ~30 s; features
-  for 3000 clips ~19 min; training ~1.2 s per step with the full negative sets, so the default 10,000 steps
-  take about 3.5 hours. (A tiny probe with only the eval negatives ran at ~0.05 s/step, which is misleading.)
-- On Linux with an NVIDIA GPU, `train.sh` installs CUDA TensorFlow and uses generation batch 100.
+## Tune it to your voice (optional)
+
+The published model is trained on synthetic voices and public recordings only. If it misses you, train a
+copy that knows your voice. It stays on your computer.
+
+1. On your phone, record one voice memo saying "Hey Hermes" 60–100 times with about a second between: near
+   and across the room, quiet and loud, mumbled and clear.
+2. Cut it into clips: `wakeword/.venv/bin/python wakeword/record.py split memo.m4a` (needs ffmpeg for phone
+   formats). Or record at the computer: `record.py mic --count 60` (needs `pip install sounddevice`).
+3. Train with them: `wakeword/train.sh --my-voice wakeword/work/my_voice --run my_voice --out wakeword/work/my_model`.
+   20 % of your clips are held out, and `evaluate` reports how often the model misses *your* voice.
+4. Upload `my_model/hey_hermes.tflite` and `.json` on the Echo's settings page, like the published model.
+
+This is the full training run (the downloads and about 2 hours). A faster fine-tune is not built yet.
 
 ## Using the model
 
 - **echo-dot-assist** accepts a microWakeWord `.tflite` with its `.json` manifest (marked experimental there):
   https://github.com/Gamer92000/echo-dot-assist/blob/main/docs/GUIDE.md#wake-word.
-  This model was tested on a second-generation Echo Dot running echo-dot-assist.
+  Tested on a second-generation Echo Dot and an Echo Show 5 (1st gen) running echo-dot-assist.
 - ESPHome devices: `micro_wake_word: models: - model: <url or path to hey_hermes.json>`. Not tested here.
-- `probability_cutoff` in the manifest comes from the test results at the end of training (see
-  `model/TRAINING_RESULTS.md` if present); tune it on the device if it triggers too often or too rarely.
+- `probability_cutoff` in the manifest comes from the evaluation; tune it on the device if it triggers too
+  often or too rarely.
 
 ## License
 
-The pipeline code is [MIT-licensed](../LICENSE). The trained model is for
-[non-commercial use only](model/MODEL_NOTICE.md).
+The pipeline code is [MIT-licensed](../LICENSE). For the bundled model, see [model/MODEL_NOTICE.md](model/MODEL_NOTICE.md).

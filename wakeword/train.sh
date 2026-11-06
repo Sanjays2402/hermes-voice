@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command: create a venv, install pinned deps, run every pipeline stage, write model/hey_hermes.{tflite,json}.
-# Needs ~30 GB free disk under wakeword/work (negative features unpack to ~25 GB).
-# Usage: wakeword/train.sh [extra pipeline.py args, e.g. --steps 10000 --samples 3000]
+# Downloads about 33 GB of permissively licensed audio; needs about 90 GB free under wakeword/work.
+# Usage: wakeword/train.sh [extra pipeline.py args, e.g. --my-voice wakeword/work/my_voice --steps 10000]
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="${PYTHON:-python3}"

@@ -67,3 +67,10 @@ Choices made while building v0.1 without asking, and why. Newest last.
 24. **The training Python is a uv-managed standalone CPython 3.11 on the data drive**: the machine's
     pyenv 3.11 lacks `_lzma` (needed by `datasets`). uv's `python install` also links `python3.11` into
     `~/.local/bin`; that link was removed again.
+25. **The wake word is trained on permissively licensed data only** (2026-11-06), so the model can be MIT
+    like the code: LibriSpeech, MUSAN filtered per file, OpenSLR simulated RIRs, DiPCo, and the LibriTTS-R
+    Piper generator. ShareAlike is left out with NonCommercial and NoDerivatives, since it could reach the
+    model. Near-miss phrases are trained as negatives; two training stages. Evidence and numbers:
+    `docs/research/2026-11-06-wake-word-permissive.md`. Supersedes the data choices in 18, 22 and 23.
+26. **Tuning to your own voice is optional and stays local.** The published model never includes anyone's
+    recordings. `wakeword/record.py` makes clips; `pipeline.py --my-voice DIR` trains on 80 % and tests on 20 %.

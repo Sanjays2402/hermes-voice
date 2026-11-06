@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Wake word pipeline retrained on permissively licensed data only (LibriSpeech, MUSAN filtered per file,
+  OpenSLR simulated room impulse responses, DiPCo, the LibriTTS-R Piper generator), with near-miss phrases
+  as negatives, two training stages, and `pipeline.py evaluate`: misses on held-out clips clean and in
+  noise, false wakes per hour on party, noise and music audio it never heard, and near misses. The candidate
+  model wakes on 12.5 % of near misses (the old one: 82 %) with no false wakes at its cutoff; the bundled
+  model is replaced after a device test. `wakeword/record.py` and `--my-voice`: optional tuning to your own
+  voice, kept local. `docs/research/2026-11-06-wake-word-permissive.md`.
 - Next up on the Hermes screen (opt-in): `screen_activity.py --profile voice --next-up on` creates a
   scheduled job in the voice profile that writes one short suggestion four times a day from its task board
   and memory; the helper passes on the latest (`next_up`), the idle screen shows it as its last line. It

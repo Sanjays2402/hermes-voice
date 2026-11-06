@@ -19,3 +19,4 @@ Conventions:
 |---|---|
 | [2026-11-05-echo-show-5.md](2026-11-05-echo-show-5.md) | Installing an Echo Show 5 1st gen and adding it to Hermes Voice |
 | [2026-11-05-hermes-screen.md](2026-11-05-hermes-screen.md) | A screen for the agent on the Echo Show: feed, page, app, background work |
+| [2026-11-06-wake-word-permissive.md](2026-11-06-wake-word-permissive.md) | Retraining "Hey Hermes" on permissively licensed data, and a test on audio it never heard |
