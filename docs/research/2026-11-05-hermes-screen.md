@@ -90,8 +90,16 @@ all profiles, without anything a user has to hack together?
   supported CLI commands with JSON output. Task fields (`hermes_cli/kanban_output.py`, `_TASK_DICT_FIELDS`):
   id, title, assignee, status, created_at, started_at, completed_at, result and more. Statuses: triage,
   todo, ready, scheduled, running, blocked, review, done, archived.
-- **The gateway API has no kanban endpoint**, and gateway plugins cannot add HTTP routes
-  (`hermes_cli/plugins.py`: tools, hooks, middleware, platforms, but no routes).
+- **The gateway API has no built-in kanban endpoint.** Correction, 2026-11-06: gateway plugins can add
+  HTTP routes with `ctx.register_platform_handler("api_server", factory)`, receiving the aiohttp app
+  before its router freezes. The original investigation missed that extension point. See the
+  [upstream reply](https://github.com/NousResearch/hermes-agent/issues/149815#issuecomment-6677290779)
+  and [plugin documentation](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/developer-guide/plugins/index.md#register-native-platform-handlers-any-platform).
+  Plugin routes need their own authentication checks. Named-profile plugin routing is still tracked in
+  [issue #147702](https://github.com/NousResearch/hermes-agent/issues/147702), with
+  [PR #147703](https://github.com/NousResearch/hermes-agent/pull/147703) open when checked on 2026-11-06.
+  The helper remains the current implementation; stable, read-only, profile-scoped core endpoints remain
+  the long-term request.
 - **The dashboard server has one** (`plugins/kanban/dashboard/plugin_api.py`: `/board`, `/workers/active`,
   `/stats`, …, mounted at `/api/plugins/kanban/`), but it authenticates with a per-process session token
   injected into the dashboard page (`hermes_cli/web_server.py`); it changes on every restart. Rejected as

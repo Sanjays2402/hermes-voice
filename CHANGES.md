@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Streamed replies cut off by the token limit retain the partial reply instead of adding the failure
+  fallback (#3). The setup skill carries the same client fix.
+- Document the Skills Hub installation block and add a static compatibility check using Hermes' actual
+  scanner and unchanged install policy. The full device guide and setup operations remain included (#4).
+- Correct the research log: gateway plugins can add HTTP routes; named-profile routing and explicit
+  authentication still need care. The current helper remains in use.
+
 - The Hermes screen recovers from a broken update by itself: if its script fails to start (an update with a
   mistake in it), the page reloads every 30 s instead of staying frozen on "Connecting".
 - Wake word pipeline retrained on permissively licensed data only (LibriSpeech, MUSAN filtered per file,

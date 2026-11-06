@@ -80,6 +80,12 @@ the feed: [docs/show-screen.md](docs/show-screen.md).
 
 ## Quick start (let your Hermes agent set it up)
 
+**Skill installation is currently blocked by Hermes' security scanner.** The command below is the
+intended installation path, but it does not currently succeed for an unverified community skill.
+Use the [manual install](#manual-install) while this is being resolved; do not disable scanning or
+use a force override. The setup scripts and device guide remain available in this repository.
+See [the scan findings and release check](docs/skill-installation.md) and [issue #4](https://github.com/majorminorlabs/hermes-voice/issues/4).
+
 1. Install the skill:
    ```bash
    hermes skills install majorminorlabs/hermes-voice/skill/hermes-voice-setup
