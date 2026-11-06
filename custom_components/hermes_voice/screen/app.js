@@ -89,6 +89,8 @@
   const TOOL_NAMES = {
     web_search: "Searching the web",
     web_extract: "Reading a page",
+    x_search: "Searching X",
+    kanban: "Checking the task board",
     browser: "Browsing",
     session_search: "Searching past conversations",
     memory: "Checking memory",
