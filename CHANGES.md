@@ -7,8 +7,8 @@
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
   from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
-- Screen: text at full brightness; the overview's slider sets the background's brightness (the avatar
-  behind the clock), remembered; the backlight stays at its maximum.
+- Screen: text at full brightness; the idle background is gently darkened; the overview's slider dims the
+  whole screen (the backlight, in the app), remembered.
 - Hermes Screen app 0.2: clears its page cache on every start (an Echo Show kept an old page after an
   update) and sets the screen's brightness (full by default; a slider in the overview). The page itself is
   served uncached with versioned file addresses.

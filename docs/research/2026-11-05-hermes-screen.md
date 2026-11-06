@@ -248,3 +248,11 @@ slider could have lowered it). Confirmed on the device by screenshot.
 **Auto-reload confirmed on the device.** Each of these steps was deployed by copying the page and restarting
 Home Assistant; the Show reloaded the new page by itself within about a minute every time (section 6), with no
 adb and no power cycle.
+
+**Correction (user, 19:18).** The slider was misread as a background control. What is wanted: the slider
+dims **the whole screen** (it may sit on a bedside table); the idle screen's background carries a fixed,
+gentle darkening so the clock and tasks stand out; on the wake word it zooms out and everything is at normal
+brightness; text is at full brightness relative to the slider. *Built:* the slider sets the backlight through
+the app (remembered by the app; down to the app's floor of 5 %); in a plain browser it dims the page with a
+CSS filter; the idle avatar is at a fixed 45 %; the page no longer resets the backlight on load (that would
+undo a bedside setting at every reload).

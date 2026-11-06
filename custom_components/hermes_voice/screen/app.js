@@ -554,22 +554,32 @@
   $("live").addEventListener("click", openOverview);
   $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
 
-  // Background brightness (the avatar behind the clock). Text stays at full brightness; the app keeps the
-  // backlight at its maximum. Remembered in this browser.
+  // Screen brightness, the whole screen. In the Hermes Screen app it sets the backlight (remembered by the
+  // app); in a browser it dims the page (remembered by the browser). Low enough for a bedside table.
   const slider = $("brightness");
-  const applyBackground = (pct) => document.documentElement.style.setProperty("--bg-level", String(pct / 100));
-  const savedLevel = Number(store.get("background"));
-  slider.value = String(Number.isFinite(savedLevel) && store.get("background") !== null ? savedLevel : 50);
-  applyBackground(Number(slider.value));
+  const bridge = window.HermesScreen && window.HermesScreen.setBrightness ? window.HermesScreen : null;
+  const MIN = 0.02;
+  function applyLevel(pct, save) {
+    const level = Math.max(MIN, Math.min(1, pct / 100));
+    if (bridge) {
+      if (save) bridge.setBrightness(level);
+    } else {
+      document.documentElement.style.filter = level < 1 ? `brightness(${level})` : "";
+      if (save) store.set("brightness", String(Math.round(level * 100)));
+    }
+  }
+  let start = 100;
+  try {
+    start = bridge ? Math.round(bridge.getBrightness() * 100) : Number(store.get("brightness") || 100);
+  } catch { /* full */ }
+  slider.value = String(start);
+  applyLevel(start, false);
   slider.addEventListener("input", () => {
-    applyBackground(Number(slider.value));
-    store.set("background", slider.value);
+    applyLevel(Number(slider.value), true);
     clearTimeout(overviewTimer);
     overviewTimer = setTimeout(closeOverview, 90000);
   });
   slider.addEventListener("click", (e) => e.stopPropagation());
-  // Inside the Hermes Screen app: keep the backlight at its maximum (an earlier slider lowered it).
-  try { if (window.HermesScreen) window.HermesScreen.setBrightness(1); } catch { /* not in the app */ }
 
   // ----------------------------------------------------------------------------------- avatar --
   // <config>/www/hermes_voice/avatar.(svg|png|webp|jpg|gif) replaces the default; avatar-<state>.* per state.
