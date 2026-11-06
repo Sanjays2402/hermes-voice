@@ -67,7 +67,8 @@ async def _say(hass: HomeAssistant, text: str = "hi") -> conversation.Conversati
 
 
 def _speech(result: conversation.ConversationResult) -> str:
-    return result.response.speech["plain"]["speech"].strip()
+    # Sentences are separated by blank lines for Piper (see test_sentences_end_with_blank_line).
+    return " ".join(result.response.speech["plain"]["speech"].split())
 
 
 def _log(hass: HomeAssistant, result: conversation.ConversationResult) -> list[Any]:
@@ -76,7 +77,7 @@ def _log(hass: HomeAssistant, result: conversation.ConversationResult) -> list[A
 
 def _assistant_text(hass: HomeAssistant, result: conversation.ConversationResult) -> str:
     return " ".join(
-        (c.content or "").strip()
+        " ".join((c.content or "").split())
         for c in _log(hass, result)
         if isinstance(c, conversation.AssistantContent) and c.content
     )
@@ -132,7 +133,7 @@ async def test_working_phrase_before_tool(hass: HomeAssistant, aioclient_mock: A
     log = _log(hass, result)
     calls = [c for c in log if isinstance(c, conversation.AssistantContent) and c.tool_calls]
     assert len(calls) == 1
-    assert calls[0].content == DEFAULT_WORKING_PHRASE
+    assert calls[0].content.strip() == DEFAULT_WORKING_PHRASE
     assert calls[0].tool_calls[0].external is True
     assert calls[0].tool_calls[0].tool_name == "web_search"
     results = [c for c in log if isinstance(c, conversation.ToolResultContent)]
@@ -235,3 +236,16 @@ def test_chunker_sentences_and_code() -> None:
     assert c.flush() == ""
     assert c.feed("## Steps\n\n- one\n- two") == "Steps."
     assert c.flush() == "one. two"
+
+
+async def test_sentences_end_with_blank_line(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Each spoken sentence ends with a blank line, so Piper speaks it at once instead of waiting for the next."""
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.post(CHAT, text=stream(chunk("One. "), chunk("Two."), chunk(finish="stop")), headers=SSE)
+    result = await _say(hass)
+    texts = [
+        c.content for c in _log(hass, result) if isinstance(c, conversation.AssistantContent) and c.content
+    ]
+    assert "".join(texts) == "One.\n\nTwo.\n\n"

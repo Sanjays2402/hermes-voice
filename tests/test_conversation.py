@@ -60,7 +60,8 @@ async def _say(
 
 
 def _speech(result: conversation.ConversationResult) -> str:
-    return result.response.speech["plain"]["speech"]
+    # Streamed sentences are separated by blank lines for Piper; compare the words.
+    return " ".join(result.response.speech["plain"]["speech"].split())
 
 
 async def test_entity_registered(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
@@ -214,7 +215,8 @@ async def test_cleanup_applied_and_toggle(hass: HomeAssistant, aioclient_mock: A
     assert _speech(await _say(hass, "hi")) == "Sure, captain! See link. one. two"
     hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_VOICE_CLEANUP: False})
     await hass.async_block_till_done()
-    assert _speech(await _say(hass, "hi")) == raw
+    off = await _say(hass, "hi")
+    assert off.response.speech["plain"]["speech"] == raw  # passed on exactly as written
 
 
 ERROR_CASES = {

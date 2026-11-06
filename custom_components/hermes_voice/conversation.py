@@ -190,7 +190,8 @@ class HermesConversationEntity(conversation.ConversationEntity):
         anything was said, the working phrase is spoken first; text followed by a tool call makes
         the Assist pipeline start text-to-speech right away instead of after the whole reply.
         """
-        chunker = VoiceChunker(bool(self._opt(CONF_VOICE_CLEANUP)))
+        whole_sentences = bool(self._opt(CONF_VOICE_CLEANUP))  # the chunker hands on whole sentences
+        chunker = VoiceChunker(whole_sentences)
         working_phrase = (self._opt(CONF_WORKING_PHRASE) or "").strip()
         role: str = "assistant"
         said_anything = False  # in this whole turn
@@ -206,11 +207,20 @@ class HermesConversationEntity(conversation.ConversationEntity):
             return [{"role": "assistant"}]
 
         def say(text: str) -> conversation.AssistantContentDeltaDict:
-            """Content for the current assistant message, space-separated from what it has."""
+            """Content for the current assistant message, one sentence (or chunk) at a time.
+
+            Each piece ends with a blank line. Piper's sentence splitter (Wyoming Piper's
+            SentenceBoundaryDetector) treats a sentence as finished only when the next one starts,
+            or at a blank line; without it every sentence waited for the next, so speech ran a
+            sentence or two behind the text and "One moment." stayed silent until the tool returned.
+            """
             nonlocal said_anything, answer_text
-            sep = " " if answer_text and not text[:1].isspace() else ""
+            if not whole_sentences:  # voice cleanup off: raw text, as it streams
+                sep = " " if answer_text and not text[:1].isspace() else ""
+                said_anything = answer_text = True
+                return {"content": sep + text}
             said_anything = answer_text = True
-            return {"content": sep + text}
+            return {"content": text.strip() + "\n\n"}
 
         try:
             async for event in self.entry.runtime_data.client.async_chat_stream(**request):

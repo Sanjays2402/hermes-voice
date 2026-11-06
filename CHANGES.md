@@ -7,6 +7,12 @@
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
   from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
+- Faster spoken replies: every sentence handed to text-to-speech ends with a blank line, so Piper speaks it at
+  once (its sentence splitter otherwise waits for the next sentence to start, which put speech a sentence or
+  two behind and kept the working phrase silent until the tool returned). The voice persona asks for a first
+  sentence of ten to fifteen words (Home Assistant starts speech only after 60 characters) and short replies.
+- Screen: the answer appears at about the pace it is spoken (13.5 characters a second from when the Echo
+  starts speaking) instead of all at once ahead of the voice.
 - Screen: voice bars while listening (seven bars at their own paces; the Echo does not send its sound level,
   so they do not follow the voice).
 - Screen: voice timers count down on the idle screen; a ringing timer fills the screen with a Stop button

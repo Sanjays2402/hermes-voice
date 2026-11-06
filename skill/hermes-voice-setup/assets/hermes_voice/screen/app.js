@@ -123,6 +123,32 @@
     return text.length > 48 ? text.slice(0, 47) + "\u2026" : text;
   }
 
+  // The answer appears at about the pace it is spoken: Hermes writes it in a few seconds, Piper takes
+  // 15-20 s to say it, and a screen that races ahead reads as "printed, then spoken". Measured on the
+  // Echo Show 5 with Piper "ryan": about 13.5 characters a second, first sound about 0.6 s after the
+  // voice starts (the satellite turns "responding"). Text Home Assistant answered itself, typed turns and
+  // a finished reply show at once.
+  const SPEAK_RATE = 13.5;
+  const SPEAK_LEAD_MS = 600;
+  function visibleText(t) {
+    const dev = state.device || state.focus;
+    if (t.by === "home_assistant" || t.spoken || state.satellite[dev] === undefined) return t.reply;
+    if (!t.speakAt || !t.firstTextAt) return "";
+    const start = Math.max(t.speakAt, t.firstTextAt) + SPEAK_LEAD_MS;
+    const n = Math.floor(((Date.now() - start) / 1000) * SPEAK_RATE);
+    if (n <= 0) return "";
+    if (n >= t.reply.length) return t.reply;
+    const end = t.reply.indexOf(" ", n); // whole words only
+    return end < 0 ? t.reply : t.reply.slice(0, end);
+  }
+  setInterval(() => {
+    const t = state.turn;
+    if (["answering", "done"].includes(state.mode) && !t.spoken && t.reply && visibleText(t) !== t.shown) {
+      t.shown = visibleText(t);
+      renderTurn();
+    }
+  }, 150);
+
   function renderTurn() {
     const t = state.turn;
     body.dataset.by = t.by;
@@ -146,7 +172,7 @@
     } else if (state.mode === "listening" || state.mode === "thinking") {
       reply.innerHTML = "";
     } else {
-      reply.innerHTML = (t.by === "home_assistant" ? '<div class="by-ha">Home Assistant</div>' : "") + markdown(t.reply);
+      reply.innerHTML = (t.by === "home_assistant" ? '<div class="by-ha">Home Assistant</div>' : "") + markdown(visibleText(t));
     }
     fitReply();
   }
@@ -325,7 +351,7 @@
       const key = state.device || latestDevice(turns);
       if (turns[key] !== undefined) {
         const t = turns[key];
-        state.turn = { ...emptyTurn(), ...t, tools: (t.tools || []).map((x) => ({ ...x, done: !x.running })), at: (t.at || 0) * 1000 };
+        state.turn = { ...emptyTurn(), ...t, tools: (t.tools || []).map((x) => ({ ...x, done: !x.running })), at: (t.at || 0) * 1000, spoken: true };
         state.focus = key;
         if (t.phase === "done" || t.phase === "error") state.holdUntil = state.turn.at + holdMs;
       }
@@ -347,8 +373,12 @@
         state.turn = { ...emptyTurn(), phase: "listening", at: Date.now() };
         renderTurn();
       }
-      if (ev.state === "idle" && dev === (state.device || state.focus) && ["done", "error"].includes(state.turn.phase)) {
-        state.holdUntil = Date.now() + holdMs;
+      if (ev.state === "responding" && dev === (state.device || state.focus) && !state.turn.speakAt) {
+        state.turn.speakAt = Date.now();
+      }
+      if (ev.state === "idle" && dev === (state.device || state.focus)) {
+        state.turn.spoken = true; // the voice is done: show all of it
+        if (["done", "error"].includes(state.turn.phase)) state.holdUntil = Date.now() + holdMs;
       }
       return updateMode();
     }
@@ -366,6 +396,7 @@
         t.tools = t.tools.map((x) => (x.id === ev.id ? { ...x, done: true } : x));
         break;
       case "delta":
+        if (!t.firstTextAt) t.firstTextAt = Date.now();
         t.reply += ev.text || "";
         t.phase = "answering";
         break;
