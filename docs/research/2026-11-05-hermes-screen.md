@@ -207,3 +207,29 @@ word. Also: Hermes' "today" counters use the UTC day, so they reset at 00:00 UTC
   sessions. Chat titles ("Check current time", "Confirm previous message") are not worth a screen, the same
   reasoning as dropping the last question from the idle screen.
 - The *Work* column shows running and blocked or review tasks, then scheduled jobs.
+
+## 8. The Show kept an old page; the screen was dim
+
+**Observed (user).** After a power cycle the Show showed the old page: no task lines, and the old "Recent"
+column of chat sessions, which no longer existed in the current page. The page in a desktop browser was
+current.
+
+**Cause.** Home Assistant serves static files without cache headers, so the Show's WebView kept its copies
+(`index.html`, `app.js`) and reused them without asking again. The auto-reload of section 6 could not help:
+the cached page was older than that code. The ThinkPad (asked about) plays no part after the install; the
+page comes over Wi-Fi from Home Assistant.
+
+**Fix, server.** `/hermes_voice/screen` (and `/`, `/index.html`, every address a screen may have saved) is
+now served by the integration with `Cache-Control: no-store`, and loads `app.js?v=<version>` and
+`style.css?v=<version>` (the page version), so a new version is always a new address. Checked with curl:
+both addresses answer 200, `no-store`, versioned addresses. *Not enough on its own:* a power-cycled Show
+still showed the old page, because it never asked the server for the page again.
+
+**Fix, app 0.2.** The app clears its WebView cache every time it starts (`WebView.clearCache(true)`; the
+page is small). Installed over debug access (`adb install -r`, same signing key); the Show then showed the
+task lines (screenshot taken over adb).
+
+**Dim screen.** hassmic sets only the light band's brightness and dims its own face; nothing sets the
+screen's brightness while another app is in front. App 0.2 sets its window to full brightness by default and
+gives the page a bridge (`HermesScreen.setBrightness`, `getBrightness`, remembered by the app); the overview
+shows a brightness slider only inside the app.

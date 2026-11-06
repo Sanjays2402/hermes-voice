@@ -327,7 +327,9 @@ body[data-mode="idle"] .corner-clock, body[data-mode="offline"] .corner-clock { 
 .ov-head { display: flex; align-items: center; gap: 14px; height: 40px; }
 .ov-head h1 { margin: 0; font-size: 24px; font-weight: 500; }
 .ov-profile { color: var(--ink-2); font-size: 18px; }
-.ov-updated { margin-left: auto; color: var(--ink-3); font-size: 15px; }
+.ov-updated { color: var(--ink-3); font-size: 15px; }
+.ov-bright { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 20px; }
+.ov-bright input { width: 200px; height: 36px; accent-color: var(--answering); }
 .back {
   width: 40px;
   height: 40px;

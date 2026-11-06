@@ -554,6 +554,20 @@
   $("live").addEventListener("click", openOverview);
   $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
 
+  // Screen brightness: only inside the Hermes Screen app on an Echo Show (it sets the window's brightness).
+  const bridge = window.HermesScreen;
+  if (bridge && bridge.setBrightness) {
+    const slider = $("brightness");
+    $("ov-bright").hidden = false;
+    try { slider.value = String(Math.round(bridge.getBrightness() * 100)); } catch { /* keep the default */ }
+    slider.addEventListener("input", () => {
+      bridge.setBrightness(Number(slider.value) / 100);
+      clearTimeout(overviewTimer);
+      overviewTimer = setTimeout(closeOverview, 90000);
+    });
+    slider.addEventListener("click", (e) => e.stopPropagation());
+  }
+
   // ----------------------------------------------------------------------------------- avatar --
   // <config>/www/hermes_voice/avatar.(svg|png|webp|jpg|gif) replaces the default; avatar-<state>.* per state.
   const AVATAR_DIR = "/local/hermes_voice/";

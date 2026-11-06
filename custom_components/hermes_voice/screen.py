@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from aiohttp import web
 from homeassistant.components import websocket_api
 from homeassistant.components.conversation.chat_log import async_subscribe_chat_logs
-from homeassistant.components.http import HomeAssistantView, StaticPathConfig
+from homeassistant.components.http import KEY_HASS, HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
@@ -113,6 +113,7 @@ class ScreenHub:
         self._heard: dict[str, str] = {}  # conversation id -> the user's last words, until an answer comes
         self._overview: dict[str, tuple[float, dict[str, Any]]] = {}
         self.page_version = ""
+        self.page_html = ""
 
     @callback
     def async_subscribe(self, device_id: str | None, cb: ScreenCallback) -> Callable[[], None]:
@@ -282,26 +283,43 @@ class ScreenHub:
         return out
 
 
-class ScreenRedirectView(HomeAssistantView):
-    """``/hermes_voice/screen`` opens the page (a folder URL alone is not served)."""
+class ScreenPageView(HomeAssistantView):
+    """The page itself, never cached, pointing at its files by version.
+
+    The Echo Show's WebView kept an old ``app.js`` after an update: Home Assistant serves static files without
+    cache headers, so browsers may reuse them. Here the page is marked ``no-store`` and loads
+    ``app.js?v=<version>`` and ``style.css?v=<version>``, so new files always have new addresses.
+    """
 
     url = SCREEN_URL
-    extra_urls: ClassVar[list[str]] = [SCREEN_URL + "/"]
+    extra_urls: ClassVar[list[str]] = [SCREEN_URL + "/", SCREEN_URL + "/index.html"]
     name = "hermes_voice:screen"
     requires_auth = False  # the page logs in to the websocket itself
 
     async def get(self, request: web.Request) -> web.Response:
-        query = f"?{request.query_string}" if request.query_string else ""
-        raise web.HTTPFound(f"{SCREEN_URL}/index.html{query}")
+        hub = async_get_hub(request.app[KEY_HASS])
+        if hub is None or not hub.page_html:
+            return web.Response(status=503, text="Hermes Voice is starting")
+        return web.Response(
+            text=hub.page_html,
+            content_type="text/html",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
 
 
-def _page_version() -> str:
+def _load_page() -> tuple[str, str]:
+    """The page's version (a hash of its files) and its HTML with versioned, absolute file addresses."""
     digest = hashlib.sha256()
     for name in PAGE_FILES:
         path = SCREEN_DIR / name
         if path.is_file():
             digest.update(path.read_bytes())
-    return digest.hexdigest()[:12]
+    version = digest.hexdigest()[:12]
+    index = SCREEN_DIR / "index.html"
+    html = index.read_text(encoding="utf-8") if index.is_file() else ""
+    for name in ("app.js", "style.css"):
+        html = html.replace(f'"{name}"', f'"{SCREEN_URL}/{name}?v={version}"')
+    return version, html
 
 
 def _pick(data: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
@@ -327,13 +345,13 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     if DATA_SCREEN in hass.data:
         return
     hub = ScreenHub(hass)
-    hub.page_version = await hass.async_add_executor_job(_page_version)
+    hub.page_version, hub.page_html = await hass.async_add_executor_job(_load_page)
     hass.data[DATA_SCREEN] = hub
     async_subscribe_chat_logs(hass, hub.on_chat_log)
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_overview)
     if SCREEN_DIR.is_dir() and getattr(hass, "http", None) is not None:
-        hass.http.register_view(ScreenRedirectView())
+        hass.http.register_view(ScreenPageView())
         await hass.http.async_register_static_paths([StaticPathConfig(SCREEN_URL, str(SCREEN_DIR), False)])
 
 
