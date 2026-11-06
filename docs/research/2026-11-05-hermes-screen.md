@@ -173,3 +173,37 @@ its close handling at once and reconnects. *Tests:* 75 s idle with heartbeats �
 
 **Caveat.** A Show still running a page from before this change has neither, so it needs one reload by hand
 (power the Show off and on; it starts Hermes Screen again with the saved address and login).
+
+## 7. Demo tasks for a video, and what they revealed
+
+**Goal (user).** Realistic tasks on the screen for a demo video: client work for a shop, this project, and
+more. Real Hermes tasks, not a fake data source.
+
+**Finding: the gateway dispatches tasks by itself.** The user's understanding was that nothing picks up
+tasks automatically, and no separate `hermes kanban daemon` process was running. But the voice profile's
+gateway has the kanban dispatcher built in. After one demo task was put up for review (`unblock` → `claim` →
+`request-review`), the gateway, within a minute and with no further command:
+1. claimed it for review as the voice profile (run 5) and requested changes ("no reviewable draft was
+   delivered");
+2. moved it back to ready, claimed it again and spawned a worker (run 6) to write the draft, spending model
+   calls.
+The task could not be blocked while in review; it was archived, which stopped it. Two workers had run.
+
+*Safe on this setup:* tasks created with `--initial-status blocked` (never dispatched), tasks completed with
+`complete --force` (done), and one task claimed by hand with a long TTL (shows as running; no worker was
+spawned for it). *Not safe:* anything put in `ready` or `review`; the gateway picks it up.
+
+**Finding: a busy board can stall the helper.** While tasks were being written in bulk, one background refresh
+timed out (`hermes kanban boards list` over 20 s). The helper kept serving its last good answer and the next
+refresh worked, as designed; the screen was up to a minute behind.
+
+**Finding: "degraded" was the Mac's internal disk.** Hermes' readiness check reported 97.5 % used on the disk
+Hermes lives on (the internal drive: 460 GB, 12 GB free); the large data drive was 20 % used and is not where
+Hermes keeps its files. The overview now says why a gateway is degraded ("low disk (98%)") instead of the bare
+word. Also: Hermes' "today" counters use the UTC day, so they reset at 00:00 UTC.
+
+**Changes from user review of the screen.**
+- The overview's middle column shows **finished work** (done tasks, last 3 hours) instead of recent chat
+  sessions. Chat titles ("Check current time", "Confirm previous message") are not worth a screen, the same
+  reasoning as dropping the last question from the idle screen.
+- The *Work* column shows running and blocked or review tasks, then scheduled jobs.

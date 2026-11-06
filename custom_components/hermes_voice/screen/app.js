@@ -234,14 +234,15 @@
   }
 
   /** Background work, most urgent first: running, needs you, just finished (screen_activity.py via hermes_voice). */
-  function workItems() {
+  function workItems(parts = ["running", "attention", "recent"]) {
     const act = (state.overview && state.overview.activity) || {};
     const all = act.scope === "all";
     const who = (t) => (all && t.assignee ? " · " + escHtml(t.assignee) : "");
+    const pick = (part) => (parts.includes(part) && act[part]) || [];
     return [
-      ...(act.running || []).map((t) => `<span class="act run">◐</span> <b>${escHtml(t.title)}</b>${who(t)} · ${since(t.started_at || Date.now() / 1000)}`),
-      ...(act.attention || []).map((t) => `<span class="act need">●</span> ${t.status === "review" ? "Ready for your review" : "Blocked"}: <b>${escHtml(t.title)}</b>${who(t)}`),
-      ...(act.recent || []).map((t) => `<span class="act done">✓</span> <b>${escHtml(t.title)}</b>${who(t)} · ${escHtml(relTime(t.completed_at))}`),
+      ...pick("running").map((t) => `<span class="act run">◐</span> <b>${escHtml(t.title)}</b>${who(t)} · ${since(t.started_at || Date.now() / 1000)}`),
+      ...pick("attention").map((t) => `<span class="act need">●</span> ${t.status === "review" ? "Ready for your review" : "Blocked"}: <b>${escHtml(t.title)}</b>${who(t)}`),
+      ...pick("recent").map((t) => `<span class="act done">✓</span> <b>${escHtml(t.title)}</b>${who(t)} · ${escHtml(relTime(t.completed_at))}`),
     ];
   }
 
@@ -492,7 +493,14 @@
     $("ov-profile").textContent = ov.profile ? "· " + ov.profile : "";
     $("ov-updated").textContent = state.overviewAt ? "updated " + relTime(state.overviewAt / 1000) : "";
     const jobs = ov.jobs || [];
-    const work = workItems().slice(0, 4).map((html) => {
+    // Work: what is running or needs you, then what is scheduled. Finished: what is done.
+    const asItems = (htmls) => htmls.map((html) => {
+      const el = document.createElement("li");
+      el.className = "w";
+      el.innerHTML = html;
+      return el;
+    });
+    const work = workItems(["running", "attention"]).slice(0, 4).map((html) => {
       const el = document.createElement("li");
       el.className = "w";
       el.innerHTML = html;
@@ -506,18 +514,13 @@
       ...(work.length || scheduled.length ? [...work, ...scheduled] : [empty(ov.errors && ov.errors.jobs ? "Could not load jobs" : "Nothing running or scheduled")]),
       ...note,
     );
-    const sessions = ov.sessions || [];
-    $("ov-sessions").replaceChildren(
-      ...(sessions.length
-        ? sessions.slice(0, 6).map((s) =>
-            li(s.title || s.preview || "Conversation", [relTime(s.last_active || s.started_at), s.message_count ? s.message_count + " messages" : "", SOURCES[s.source] || s.source].filter(Boolean).join(" · ")),
-          )
-        : [empty(ov.errors && ov.errors.sessions ? "Could not load conversations" : "No conversations yet")]),
-    );
+    // Chat sessions are not shown: what was said to an assistant is not worth a screen (user, 2026-11-05).
+    const finished = asItems(workItems(["recent"]).slice(0, 6));
+    $("ov-sessions").replaceChildren(...(finished.length ? finished : [empty("Nothing finished in the last 3 hours")]));
     const h = ov.health || {};
     const m = h.metrics_today || {};
     const rows = [
-      ["Gateway", h.status ? `<span class="${h.status === "ok" ? "ok" : "warn"}">${h.status}</span>` : "—"],
+      ["Gateway", h.status ? `<span class="${h.status === "ok" ? "ok" : "warn"}">${healthText(h)}</span>` : "\u2014"],
       ["Working", h.gateway_busy ? '<span class="warn">busy</span>' : h.active_agents ? h.active_agents + " running" : "idle"],
       ["Requests", m.requests != null ? m.requests : "—"],
       ["Messages", m.messages != null ? m.messages : "—"],
@@ -527,7 +530,14 @@
     $("ov-status").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
 
-  const SOURCES = { api_server: "voice / API", cli: "terminal", tui: "terminal", desktop: "desktop app", cron: "scheduled" };
+  /** "ok", or what Hermes' readiness checks flag: "low disk (98%)", "model degraded". */
+  function healthText(h) {
+    const w = (h.warnings || [])[0];
+    if (!w || h.status === "ok") return escHtml(h.status);
+    if (w.check === "disk") return "low disk" + (w.used_percent != null ? ` (${Math.round(w.used_percent)}%)` : "");
+    return escHtml(w.check.replace(/_/g, " ") + " " + (w.status || ""));
+  }
+
   let overviewTimer = null;
   function openOverview() {
     if (!["idle", "done", "offline"].includes(state.mode)) return;

@@ -287,3 +287,26 @@ async def test_overview_activity_all_helper_down(
     await ws.send_json({"id": 1, "type": "hermes_voice/screen/overview"})
     result = (await ws.receive_json())["result"]
     assert "activity" not in result and "activity" in result["errors"]
+
+
+async def test_overview_health_warnings(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_ws_client: WebSocketGenerator
+) -> None:
+    """A degraded gateway says which check is not ok (here: a nearly full disk)."""
+    await _setup(hass, aioclient_mock, {"screen_activity": "off"})
+    aioclient_mock.get(f"{ROOT}/api/jobs", json={})
+    aioclient_mock.get(f"{ROOT}/api/sessions?limit=8", json={})
+    aioclient_mock.get(
+        f"{ROOT}/health/detailed",
+        json={
+            "status": "degraded",
+            "readiness": {
+                "checks": {"disk": {"status": "degraded", "used_percent": 97.5}, "model": {"status": "ok"}}
+            },
+        },
+    )
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "hermes_voice/screen/overview"})
+    health = (await ws.receive_json())["result"]["health"]
+    assert health["status"] == "degraded"
+    assert health["warnings"] == [{"check": "disk", "status": "degraded", "used_percent": 97.5}]

@@ -271,6 +271,13 @@ class ScreenHub:
                 }
             else:
                 out["health"] = _pick(res, HEALTH_FIELDS)
+                # Which of Hermes' readiness checks are not ok, so a screen can say why ("disk 97%").
+                checks = (res.get("readiness") or {}).get("checks") or {}
+                out["health"]["warnings"] = [
+                    {"check": name, "status": c.get("status"), "used_percent": c.get("used_percent")}
+                    for name, c in checks.items()
+                    if isinstance(c, dict) and c.get("status") not in (None, "ok")
+                ]
         self._overview[entry.entry_id] = (time.monotonic(), out)
         return out
 
