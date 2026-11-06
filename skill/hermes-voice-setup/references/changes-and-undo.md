@@ -106,6 +106,15 @@ A read-only login service next to Hermes (launchd on macOS, a systemd user unit 
 python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile <profile> --uninstall
 ```
 
+### The next up job
+
+Opt-in, made by `screen_activity.py --next-up on`.
+
+| What | Undo |
+|---|---|
+| A scheduled job *Hermes Voice: next up* in the voice profile (four short model calls a day; the answer stays local) and the read-only script `scripts/hermes_voice_next_up.py` in the profile | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile <profile> --next-up off` (removes both), or `hermes -p <profile> cron remove <id>` |
+| The profile's scheduled jobs limited to the `todo` toolset (they had every tool, terminal and computer use included). `config.yaml` is backed up to `hermes-voice-backups/` first | Restore `config.yaml` from that backup, or `hermes -p <profile> tools enable --platform cron <toolsets>`. `--next-up off` leaves the limit in place, since it is the safer setting |
+
 ### The task board
 
 Hermes Voice never writes to it. If you made display-only tasks for a demo, create them with

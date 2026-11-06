@@ -183,3 +183,104 @@ def test_cache(mod: ModuleType, fake_hermes: tuple[str, Path], monkeypatch: pyte
     assert stale["running"]
     kanban._refreshing["profile"].join(5)  # ... while a refresh runs in the background
     assert len(log.read_text().splitlines()) > first
+
+
+# ------------------------------------------------------------------------------------------- next up --
+
+
+def _next_up_profile(tmp_path: Path, runs: dict[str, tuple[str, float]], enabled: bool = True) -> Path:
+    """A profile folder with the next-up job and its run files {name: (text, mtime)}."""
+    pdir = tmp_path / "voice"
+    (pdir / "cron" / "output" / "j1").mkdir(parents=True)
+    jobs = {
+        "jobs": [
+            {"id": "j0", "name": "Morning brief"},
+            {"id": "j1", "name": "Hermes Voice: next up", "enabled": enabled},
+        ]
+    }
+    (pdir / "cron" / "jobs.json").write_text(json.dumps(jobs))
+    for name, (text, mtime) in runs.items():
+        f = pdir / "cron" / "output" / "j1" / name
+        f.write_text(text)
+        import os
+
+        os.utime(f, (mtime, mtime))
+    return pdir
+
+
+def _run_doc(answer: str) -> str:
+    return (
+        "# Cron Job: Hermes Voice: next up\n\n**Job ID:** j1\n\n## Prompt\n\nreply NONE if nothing\n\n"
+        f"## Response\n\n{answer}\n"
+    )
+
+
+def test_next_up_latest_answer(mod: ModuleType, tmp_path: Path) -> None:
+    pdir = _next_up_profile(
+        tmp_path,
+        {
+            "2026-11-05_08-00-00.md": (_run_doc("Old idea"), NOW - 7200),
+            "2026-11-05_12-00-00.md": (_run_doc("**Review the shop photos**"), NOW - 600),
+        },
+    )
+    assert mod.read_next_up(str(pdir), now=NOW) == {"text": "Review the shop photos", "at": NOW - 600}
+
+
+def test_next_up_skips_failed_run(mod: ModuleType, tmp_path: Path) -> None:
+    """A run without an answer (blocked, failed) falls back to the one before."""
+    pdir = _next_up_profile(
+        tmp_path,
+        {
+            "2026-11-05_08-00-00.md": (_run_doc("Plan the demo video"), NOW - 3600),
+            "2026-11-05_12-00-00.md": ("# Cron Job: x\n\n**Status:** BLOCKED\n", NOW - 60),
+        },
+    )
+    assert mod.read_next_up(str(pdir), now=NOW)["text"] == "Plan the demo video"
+
+
+@pytest.mark.parametrize(
+    ("answer", "age", "enabled"),
+    [
+        ("NONE", 60, True),
+        ("None.", 60, True),
+        ("[SILENT]", 60, True),
+        ("Plan it", 13 * 3600, True),
+        ("Plan it", 60, False),
+    ],
+)
+def test_next_up_nothing(mod: ModuleType, tmp_path: Path, answer: str, age: int, enabled: bool) -> None:
+    """NONE, a suggestion older than 12 hours, or a paused job: nothing on the screen."""
+    pdir = _next_up_profile(tmp_path, {"r.md": (_run_doc(answer), NOW - age)}, enabled=enabled)
+    assert mod.read_next_up(str(pdir), now=NOW) is None
+
+
+def test_next_up_off_or_long(mod: ModuleType, tmp_path: Path) -> None:
+    assert mod.read_next_up(str(tmp_path / "missing"), now=NOW) is None
+    pdir = _next_up_profile(tmp_path, {"r.md": (_run_doc("x" * 200), NOW - 60)})
+    text = mod.read_next_up(str(pdir), now=NOW)["text"]
+    assert len(text) == 80 and text.endswith("\u2026")
+
+
+def test_next_up_in_activity(mod: ModuleType, fake_hermes: tuple[str, Path], tmp_path: Path) -> None:
+    exe, _ = fake_hermes
+    pdir = _next_up_profile(tmp_path, {"r.md": (_run_doc("Plan it"), NOW - 60)})
+    assert (
+        mod.Kanban(exe, "voice", profile_dir=str(pdir)).activity("profile", now=NOW)["next_up"]["text"]
+        == "Plan it"
+    )
+    assert mod.Kanban(exe, "voice").activity("profile", now=NOW)["next_up"] is None
+
+
+def test_board_script(mod: ModuleType, fake_hermes: tuple[str, Path], tmp_path: Path) -> None:
+    """The script written into the profile lists this profile's open tasks and today's finished ones."""
+    import subprocess
+    import sys
+
+    exe, log = fake_hermes
+    script = tmp_path / "board.py"
+    script.write_text(mod.BOARD_SCRIPT.format(hermes=exe, profile="voice"))
+    out = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, check=True).stdout
+    assert "[running] Research Echo Show 8 (board default)" in out
+    assert "[review] Draft upstream issue" in out
+    assert "Refactor the gateway" not in out  # another profile's
+    assert all("--assignee voice" in ln for ln in log.read_text().splitlines() if "--status" in ln)

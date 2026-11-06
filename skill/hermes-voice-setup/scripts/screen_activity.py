@@ -19,6 +19,13 @@ Examples:
   screen_activity.py --profile voice                         # run in the foreground
   screen_activity.py --profile voice --install [--dry-run]   # login service (launchd on macOS, systemd on Linux)
   screen_activity.py --profile voice --uninstall
+  screen_activity.py --profile voice --next-up on            # opt-in "next up" line (a scheduled job)
+  screen_activity.py --profile voice --next-up off
+
+"Next up" (opt-in): a scheduled job in the voice profile looks at its task board and what it remembers a few
+times a day and writes one short suggestion. This helper passes the latest one on (`next_up` in /activity).
+Turning it on also limits the profile's scheduled jobs to the harmless `todo` toolset (they get every tool,
+the terminal included, by default); config.yaml is backed up first.
 """
 
 from __future__ import annotations
@@ -50,13 +57,109 @@ ATTENTION = ("blocked", "review")
 TASK_FIELDS = ("id", "title", "assignee", "status", "created_at", "started_at", "completed_at")
 SERVICE_LABEL = "ai.hermes-voice.screen-activity"
 
+# "Next up": a scheduled job in the voice profile; its latest answer is the suggestion.
+NEXT_UP_NAME = "Hermes Voice: next up"
+NEXT_UP_SCRIPT = "hermes_voice_next_up.py"
+NEXT_UP_SCHEDULE = "0 8,12,16,20 * * *"
+NEXT_UP_MAX_AGE = 12 * 3600  # an older suggestion is not shown
+NEXT_UP_MAX_CHARS = 80
+NEXT_UP_TOOLS = ["todo"]  # scheduled jobs in the voice profile need nothing that touches the computer
+NEXT_UP_PROMPT = (
+    "You write the next-up line for a small screen on the user's desk (an Echo Show running Hermes Voice). "
+    "The script output is this profile's task board. Using it and what you remember about the user's "
+    "work, suggest the single most useful next thing for the user to do or to ask you. Reply with one line "
+    "of at most 60 characters: plain text, starting with a verb, no quotes, no emoji, no markdown. Anyone "
+    "in the room can see the screen, so leave out private details, other people's names, money and health. "
+    "If nothing useful comes to mind, reply with the single word NONE."
+)
+RESPONSE_HEADING = "## Response"  # Hermes' run file: header, "## Prompt", then the answer under this
+# Written into the profile's scripts folder (Hermes runs job scripts only from there). Read-only.
+BOARD_SCRIPT = '''#!/usr/bin/env python3
+"""Written by Hermes Voice (screen_activity.py --next-up on): prints this profile's task board for the
+"next up" job. Read-only. Remove with: screen_activity.py --profile {profile} --next-up off"""
+import json
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+HERMES = {hermes!r}
+PROFILE = {profile!r}
+STATUSES = ("running", "blocked", "review", "ready", "todo", "done")
+
+
+def run(*args):
+    p = subprocess.run([HERMES, "kanban", *args, "--json"], capture_output=True, text=True, timeout=60)
+    return json.loads(p.stdout or "null") if p.returncode == 0 else None
+
+
+boards = [b["slug"] for b in run("boards", "list") or [] if isinstance(b, dict) and b.get("slug") and not b.get("archived")]
+queries = [(b, s) for b in boards for s in STATUSES]
+with ThreadPoolExecutor(max_workers=8) as pool:
+    rows = list(pool.map(lambda q: (q, run("--board", q[0], "list", "--status", q[1], "--assignee", PROFILE) or []), queries))
+day_ago = time.time() - 86400
+lines = []
+for (board, status), tasks in rows:
+    for t in tasks:
+        if not isinstance(t, dict) or (status == "done" and (t.get("completed_at") or 0) < day_ago):
+            continue
+        lines.append(f"- [{{status}}] {{t.get('title', '')}} (board {{board}})")
+print("Task board for this profile:" if lines else "The task board has nothing for this profile.")
+print("\\n".join(lines))
+'''
+
+
+def _jobs(profile_dir: str) -> list[dict[str, Any]]:
+    try:
+        with open(os.path.join(profile_dir, "cron", "jobs.json")) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    jobs = data.get("jobs", []) if isinstance(data, dict) else data
+    return [j for j in jobs if isinstance(j, dict)]
+
+
+def next_up_job(profile_dir: str) -> dict[str, Any] | None:
+    return next((j for j in _jobs(profile_dir) if j.get("name") == NEXT_UP_NAME), None)
+
+
+def read_next_up(profile_dir: str, now: float | None = None) -> dict[str, Any] | None:
+    """The latest suggestion of the "next up" job, or None (job off, no run yet, NONE, a failed run, too old)."""
+    job = next_up_job(profile_dir)
+    if not job or not job.get("id") or job.get("enabled") is False:
+        return None
+    out_dir = os.path.join(profile_dir, "cron", "output", os.path.basename(str(job["id"])))
+    try:
+        runs = sorted(f for f in os.listdir(out_dir) if f.endswith(".md"))
+    except OSError:
+        return None
+    now = time.time() if now is None else now
+    for name in reversed(runs):
+        path = os.path.join(out_dir, name)
+        at = os.path.getmtime(path)
+        if at < now - NEXT_UP_MAX_AGE:
+            return None
+        with open(path, errors="replace") as f:
+            doc = f.read()
+        if RESPONSE_HEADING not in doc:
+            continue  # a skipped or failed run: try the one before
+        answer = doc.rsplit(RESPONSE_HEADING, 1)[1]
+        line = next((ln.strip() for ln in answer.splitlines() if ln.strip()), "")
+        line = line.strip("*_`\"' ").strip()
+        if not line or line.upper().rstrip(".") in ("NONE", "[SILENT]"):  # Hermes offers [SILENT] to jobs
+            return None
+        if len(line) > NEXT_UP_MAX_CHARS:
+            line = line[: NEXT_UP_MAX_CHARS - 1].rstrip() + "\u2026"
+        return {"text": line, "at": int(at)}
+    return None
+
 
 class Kanban:
     """Runs `hermes kanban` and turns its JSON into what the screen shows."""
 
-    def __init__(self, hermes: str, profile: str, timeout: float = 20) -> None:
+    def __init__(self, hermes: str, profile: str, timeout: float = 20, profile_dir: str | None = None) -> None:
         self.hermes = hermes
         self.profile = profile
+        self.profile_dir = profile_dir
         self.timeout = timeout
         self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._refreshing: dict[str, threading.Thread] = {}
@@ -140,6 +243,7 @@ class Kanban:
                 "running": running[:MAX_ITEMS],
                 "attention": attention[:MAX_ITEMS],
                 "recent": recent[:MAX_ITEMS],
+                "next_up": read_next_up(self.profile_dir, now) if self.profile_dir else None,
                 "generated_at": int(now),
             }
             self._cache[scope] = (time.monotonic(), out)
@@ -291,6 +395,71 @@ def uninstall(a: argparse.Namespace) -> None:
         subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
 
 
+def next_up_on(a: argparse.Namespace, hermes: str) -> None:
+    """Opt in: the board script, scheduled jobs limited to `todo`, and the job itself. Each step is skipped
+    when already done, so running it again is safe."""
+    pdir = os.path.join(a.hermes_root, "profiles", a.profile)
+    if not os.path.isdir(pdir):
+        die(f"no profile folder {pdir}")
+    script = os.path.join(pdir, "scripts", NEXT_UP_SCRIPT)
+    content = BOARD_SCRIPT.format(hermes=hermes, profile=a.profile)
+    current = open(script).read() if os.path.exists(script) else None
+    if current != content and act(f"write the board script {script} (read-only: hermes kanban list)"):
+        os.makedirs(os.path.dirname(script), exist_ok=True)
+        with open(script, "w") as f:
+            f.write(content)
+
+    # Scheduled jobs get every tool by default (terminal, files, computer use). This one needs none.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from voice_profile import platform_toolsets  # same folder; only reads `hermes tools list`
+
+    state = platform_toolsets(a.profile, "cron")
+    disable = sorted(t for t, on in state.items() if on and t not in NEXT_UP_TOOLS)
+    enable = [t for t in NEXT_UP_TOOLS if state.get(t) is False]
+    if (disable or enable) and act(
+        f"limit scheduled jobs in '{a.profile}' to {', '.join(NEXT_UP_TOOLS)} (disable {', '.join(disable) or '-'})"
+    ):
+        backup_dir = os.path.join(pdir, "hermes-voice-backups", time.strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(backup_dir, exist_ok=True)
+        shutil.copy2(os.path.join(pdir, "config.yaml"), backup_dir)
+        say(f"   config.yaml backed up to {backup_dir}")
+        if disable:
+            _hermes(hermes, "-p", a.profile, "tools", "disable", "--platform", "cron", *disable)
+        if enable:
+            _hermes(hermes, "-p", a.profile, "tools", "enable", "--platform", "cron", *enable)
+
+    if next_up_job(pdir):
+        say(f"job '{NEXT_UP_NAME}' already exists (hermes -p {a.profile} cron list)")
+        return
+    if act(f"create the job '{NEXT_UP_NAME}' in '{a.profile}' ({a.next_up_schedule}, answer kept locally)"):
+        _hermes(
+            hermes, "-p", a.profile, "cron", "create", a.next_up_schedule, NEXT_UP_PROMPT,
+            "--name", NEXT_UP_NAME, "--script", NEXT_UP_SCRIPT, "--deliver", "local", "--failure-deliver", "local",
+        )
+        say(f"   first suggestion at the next scheduled time; now: hermes -p {a.profile} cron run <id>")
+
+
+def next_up_off(a: argparse.Namespace, hermes: str) -> None:
+    """Remove the job and the board script. The tool limit on scheduled jobs stays (undo: restore
+    config.yaml from hermes-voice-backups, or `hermes -p <profile> tools enable --platform cron ...`)."""
+    pdir = os.path.join(a.hermes_root, "profiles", a.profile)
+    job = next_up_job(pdir)
+    if job and act(f"remove the job '{NEXT_UP_NAME}' ({job.get('id')})"):
+        _hermes(hermes, "-p", a.profile, "cron", "remove", str(job["id"]))
+    script = os.path.join(pdir, "scripts", NEXT_UP_SCRIPT)
+    if os.path.exists(script) and act(f"remove {script}"):
+        os.remove(script)
+    if not job and not os.path.exists(script):
+        say("next up is not on")
+
+
+def _hermes(hermes: str, *args: str) -> str:
+    proc = subprocess.run([hermes, *args], capture_output=True, text=True, timeout=120)
+    if proc.returncode != 0:
+        die(f"hermes {' '.join(args[:4])} ... failed: {(proc.stderr or proc.stdout).strip()[:300]}")
+    return proc.stdout
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--profile", required=True, help="the voice profile (its API key guards the helper)")
@@ -302,6 +471,8 @@ def main() -> None:
     p.add_argument("--scope", choices=SCOPES, default="profile")
     p.add_argument("--install", action="store_true", help="install and start as a login service")
     p.add_argument("--uninstall", action="store_true", help="stop and remove the login service")
+    p.add_argument("--next-up", choices=("on", "off"), help="opt-in suggestion line: create or remove the job")
+    p.add_argument("--next-up-schedule", default=NEXT_UP_SCHEDULE, help=f"cron schedule (default {NEXT_UP_SCHEDULE!r})")
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     set_dry_run(a.dry_run)
@@ -314,9 +485,13 @@ def main() -> None:
     key = read_env_file(os.path.join(a.hermes_root, "profiles", a.profile, ".env")).get("API_SERVER_KEY", "")
     if not key and not a.check:
         die(f"profile '{a.profile}' has no API_SERVER_KEY; set it up with voice_profile.py first")
+    if a.next_up == "on":
+        return next_up_on(a, hermes)
+    if a.next_up == "off":
+        return next_up_off(a, hermes)
     if a.install:
         return install(a, hermes)
-    kanban = Kanban(hermes, a.profile)
+    kanban = Kanban(hermes, a.profile, profile_dir=os.path.join(a.hermes_root, "profiles", a.profile))
     if a.check:
         say(json.dumps(kanban.activity(a.scope), indent=2))
         return

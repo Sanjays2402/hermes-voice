@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Next up on the Hermes screen (opt-in): `screen_activity.py --profile voice --next-up on` creates a
+  scheduled job in the voice profile that writes one short suggestion four times a day from its task board
+  and memory; the helper passes on the latest (`next_up`), the idle screen shows it as its last line. It
+  limits the profile's scheduled jobs to the `todo` toolset (they had every tool by default), with a backup.
+- `tests/run.sh` checks the screen page's script with `node --check`.
 - New page `docs/changes-and-undo.md`: everything Hermes Voice changes in Home Assistant, Hermes and on the
   Echo, and how to undo each.
 - Background work on the Hermes screen (`docs/show-screen.md`, step 4): the idle screen shows Hermes' tasks

@@ -262,6 +262,7 @@ async def test_overview_activity(
             ],
             "attention": [],
             "recent": [{"id": "t5", "title": "Digest", "completed_at": 2}],
+            "next_up": {"text": "Review the draft", "at": 3, "extra": "dropped"},
         },
     )
     ws = await hass_ws_client(hass)
@@ -272,6 +273,7 @@ async def test_overview_activity(
         "running": [{"id": "t1", "title": "Research", "assignee": "voice", "started_at": 1}],
         "attention": [],
         "recent": [{"id": "t5", "title": "Digest", "completed_at": 2}],
+        "next_up": {"text": "Review the draft", "at": 3},
     }
     call = next(c for c in aioclient_mock.mock_calls if "8660" in str(c[1]))
     assert call[3]["Authorization"] == f"Bearer {KEY}"

@@ -221,6 +221,7 @@ body[data-mode="error"] .turn-pane { display: flex; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .act.need { color: var(--answering); }
 .act.done { color: var(--local); }
+.act.next { color: var(--listening); }
 .ov-list .w {
   font-size: 16px;
   line-height: 1.3;

@@ -2,7 +2,7 @@
 
 Status: steps 1–4 are built and run on an Echo Show 5 as its home screen (the feed, the page, the app:
 install steps in [devices/echo/README.md](../devices/echo/README.md#hermes-screen-on-an-echo-show); background
-work: [Background work](#background-work)). Memories and suggestions are not built. The research record is
+work: [Background work](#background-work); suggestions: [Next up](#next-up)). Memories are not built. The research record is
 [docs/research/2026-11-05-hermes-screen.md](research/2026-11-05-hermes-screen.md).
 
 To remove the screen or turn parts of it off, see [what Hermes Voice changes, and how to undo each](changes-and-undo.md#the-hermes-screen).
@@ -30,6 +30,29 @@ or blocked, and finished in the last 3 hours. Without any, it shows the next sch
   runs `hermes kanban ... --json`, listens on 127.0.0.1:8660, accepts only the voice profile's API key, and
   passes on titles, owners, status and times, never task bodies or results. `--check` prints what the
   screen would get.
+
+## Next up
+
+Opt-in: one short suggestion under the work lines, for example "→ Next up: Test voice response speed on the
+Echo Show", written by the voice profile a few times a day from its task board and what it remembers.
+
+```bash
+python3 skill/hermes-voice-setup/scripts/screen_activity.py --profile voice --next-up on   # or off
+```
+
+- **What it does.** Puts a small read-only script in the profile's `scripts/` folder (it lists the profile's
+  tasks: open ones and those finished in the last day) and creates a Hermes scheduled job, *Hermes Voice:
+  next up*, at 8:00, 12:00, 16:00 and 20:00 (`--next-up-schedule` to change; `hermes -p voice cron run <id>`
+  for one now). The job's answer stays on this computer (`--deliver local`); the helper passes on the
+  latest line, if it is under 12 hours old, as `next_up` in `/activity`. The answer *NONE* shows nothing.
+- **Tools.** Scheduled jobs in a profile get every tool by default, the terminal and computer use included.
+  This job needs none, so turning it on limits the voice profile's scheduled jobs to `todo` (task planning,
+  harmless), after backing up `config.yaml` to `hermes-voice-backups/`. Undo: [changes-and-undo.md](changes-and-undo.md#the-next-up-job).
+- **Cost.** One short model call per run, four a day by default.
+- **Privacy.** The prompt asks for one line with no private details, other people's names, money or health:
+  anyone in the room can read the screen.
+- **Where it shows.** Idle: last of the three lines (timers and work above it). Overview: first in *Work*.
+  The job itself is not listed as "Next: …" on the idle screen.
 
 Idle shows a close-up of the avatar's eyes behind the clock (zoom 8×; `?zoom=`, and `?eyes=x,y` for where the
 eyes are in a custom picture); on the wake word it zooms out to the whole avatar on the right, and back after

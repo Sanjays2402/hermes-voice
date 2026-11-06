@@ -271,6 +271,7 @@ class ScreenHub:
                         part: [_pick(t, TASK_FIELDS) for t in res.get(part, []) if isinstance(t, dict)]
                         for part in ("running", "attention", "recent")
                     },
+                    "next_up": _next_up(res.get("next_up")),
                 }
             else:
                 out["health"] = _pick(res, HEALTH_FIELDS)
@@ -283,6 +284,14 @@ class ScreenHub:
                 ]
         self._overview[entry.entry_id] = (time.monotonic(), out)
         return out
+
+
+def _next_up(value: Any) -> dict[str, Any] | None:
+    """The helper's opt-in suggestion line: its text (capped) and when it was written, nothing else."""
+    if not isinstance(value, dict) or not isinstance(value.get("text"), str) or not value["text"].strip():
+        return None
+    at = value.get("at")
+    return {"text": value["text"].strip()[:120], "at": at if isinstance(at, int | float) else None}
 
 
 class ScreenPageView(HomeAssistantView):

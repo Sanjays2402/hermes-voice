@@ -38,6 +38,7 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 | Install + configure HA | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --docker --config-dir DIR --set-default` |
 | Text test through HA | `python3 ${HERMES_SKILL_DIR}/scripts/verify.py --recall` |
 | Background work on an Echo Show's screen | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --install` |
+| Next up suggestion on the screen (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --next-up on` (`off` to remove) |
 | Show every profile's work (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --screen-activity all` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
 | What it changes, and how to undo each (read before removing anything) | `${HERMES_SKILL_DIR}/references/changes-and-undo.md` |
@@ -125,6 +126,9 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
    screen"), tell them that anyone who can see the Show will then see every profile's task titles, and on
    their yes run `ha_setup.py --profile voice --screen-activity all` (`profile` to go back, `off` to hide
    it). The same choice is in Home Assistant: Hermes Voice → Configure → "Background work on the screen".
+   If the user wants suggestions on the screen ("tell me what to do next"), explain the *next up* job (one
+   short model call four times a day; it limits the voice profile's scheduled jobs to the `todo` toolset)
+   and on their yes run `screen_activity.py --profile voice --next-up on`.
 5. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
    With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
    Success = a reply in the profile's own voice/personality and `"recalled": true`.

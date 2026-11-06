@@ -292,12 +292,23 @@
     });
   }
 
-  /** The idle screen's lines: timers, background work, else the next scheduled job, else nothing. */
+  /** The opt-in "next up" suggestion (screen_activity.py --next-up on), as an idle line. */
+  function nextUpItem() {
+    const n = state.overview && state.overview.activity && state.overview.activity.next_up;
+    return n && n.text ? `<span class="act next">\u2192</span> Next up: <b>${escHtml(n.text)}</b>` : "";
+  }
+
+  /** The "next up" job is how the suggestion is made, not something to list as a scheduled job. */
+  const NEXT_UP_JOB = "Hermes Voice: next up";
+
+  /** The idle screen's lines: timers, background work, the next-up suggestion, else the next scheduled job. */
   function contextLine() {
     const esc = escHtml;
-    const work = [...timerItems(), ...workItems()];
-    if (work.length) return work.slice(0, 3).map((w) => `<div class="work">${w}</div>`).join("");
-    const jobs = (state.overview && state.overview.jobs) || [];
+    const nextUp = nextUpItem();
+    const work = [...timerItems(), ...workItems()].slice(0, nextUp ? 2 : 3);
+    if (nextUp) work.push(nextUp);
+    if (work.length) return work.map((w) => `<div class="work">${w}</div>`).join("");
+    const jobs = ((state.overview && state.overview.jobs) || []).filter((j) => j.name !== NEXT_UP_JOB);
     const next = jobs
       .filter((j) => j.enabled !== false && j.next_run_at)
       .sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at))[0];
@@ -592,7 +603,7 @@
       el.innerHTML = html;
       return el;
     });
-    const work = workItems(["running", "attention"]).slice(0, 4).map((html) => {
+    const work = [nextUpItem(), ...workItems(["running", "attention"])].filter(Boolean).slice(0, 4).map((html) => {
       const el = document.createElement("li");
       el.className = "w";
       el.innerHTML = html;
@@ -761,6 +772,7 @@
         running: [{ title: "Research Echo Show 8 support", assignee: "research", started_at: now / 1000 - 12 * 60 }],
         attention: [{ title: "Upstream issue draft for echo-dot-assist", assignee: "voice", status: "review" }],
         recent: [{ title: "Nightly research digest", assignee: "research", completed_at: now / 1000 - 20 * 60 }],
+        next_up: { text: "Review the echo-dot-assist issue draft", at: now / 1000 - 40 * 60 },
       },
       sessions: [
         { title: "Weather in Dallas", last_active: now / 1000 - 120, message_count: 4, source: "api_server" },

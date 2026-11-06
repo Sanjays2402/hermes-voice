@@ -363,3 +363,47 @@ Findings:
 Every change Hermes Voice makes (Home Assistant options and settings, the voice profile, the helper, the
 Echo, the screen app) is listed with its undo in [changes-and-undo.md](../changes-and-undo.md), also
 shipped in the skill so an agent can read it before removing anything.
+
+## 14. Next up: a suggestion on the idle screen
+
+**Question.** The user wanted the idle screen to offer a suggestion as well as background work, written by
+the voice profile (the user's choice, 2026-11-05).
+
+**Evidence.**
+- Hermes has its own "suggestions" (`cron/suggestions.py`), but those are proposed *scheduled jobs* the user
+  accepts with one tap, not a line of advice. Not this.
+- `hermes cron create` runs a prompt on a schedule, can run a script from the profile's `scripts/` folder
+  first and put its output in the prompt (`--script`), and with `--deliver local` keeps the answer in
+  `<profile>/cron/output/<job id>/<time>.md`: a header, `## Prompt` (with the script output), then
+  `## Response` and the answer. Hermes tells jobs they may answer `[SILENT]`.
+- `hermes tools list --platform cron` for the voice profile: every toolset on by default (terminal, files,
+  code execution, computer use, delegation, cron jobs). A job that writes one line needs none of them.
+
+**Decision.** A scheduled job, *Hermes Voice: next up*, in the voice profile at 8:00, 12:00, 16:00 and
+20:00. Its script lists the profile's tasks (read-only `hermes kanban list`); the prompt asks for one line of
+at most 60 characters, starting with a verb, nothing private (the screen is in a room), or NONE. The helper
+reads the newest answer under 12 hours old (a failed run falls back to the one before) and adds it to
+`/activity` as `next_up`; the integration passes on only its text and time. Opt-in, one command on or off.
+Scheduled jobs in the voice profile are limited to `todo` when it is turned on, with `config.yaml` backed up.
+*Alternatives:* the helper asking the gateway for a line itself (it holds the key; but a hidden model call per
+refresh and a session per call, with no way for the user to see or pause it in `hermes cron list`); a
+suggestion per screen refresh (cost).
+
+**Built.** `screen_activity.py --next-up on|off` (`--next-up-schedule`), `read_next_up()`, `next_up` in
+`/activity` and in the overview; the page shows "→ Next up: …" as the last idle line and first in the
+overview's *Work*, and no longer lists the job as "Next: …". Docs: [show-screen.md](../show-screen.md#next-up),
+[changes-and-undo.md](../changes-and-undo.md#the-next-up-job).
+
+**Tested.**
+- 10 new tests (120 in all): newest answer, markdown stripped; a failed run falls back; NONE, None.,
+  [SILENT], older than 12 hours, a paused job: nothing; a long line is cut to 80 characters; `next_up` in the
+  activity only with a profile folder; the board script lists only this profile's tasks; the integration
+  passes on text and time only.
+- Live (23:16): `--next-up on` wrote the script, limited the voice profile's scheduled jobs to `todo`
+  (`config.yaml` backed up) and created the job; `hermes -p voice cron run` gave "Test voice response speed
+  on the Echo Show" from a board of two blocked and seven finished tasks; `--check` showed it as `next_up`.
+
+**Problem found and fixed.** The first deployed page declared `next` twice in one function: a syntax error
+that stops the whole script, so a screen would show nothing. Found in the browser's console within minutes,
+fixed and redeployed. `tests/run.sh` now runs `node --check` on the page's script, since no Python test
+loads it.
