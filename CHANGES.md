@@ -7,6 +7,8 @@
   question. Read-only helper `screen_activity.py` (in the skill; login service with `--install`) answers
   from `hermes kanban ... --json`, guarded by the voice profile's key. New option *Background work on the
   screen*: this profile only (default), all profiles, or off; `ha_setup.py --screen-activity`.
+- Screen: voice bars while listening (seven bars at their own paces; the Echo does not send its sound level,
+  so they do not follow the voice).
 - Screen: voice timers count down on the idle screen; a ringing timer fills the screen with a Stop button
   (presses the Echo's own "Stop ringing"); "Mic off" and "Do not disturb" badges. New websocket
   command `hermes_voice/screen/stop_timer`. Tests time out after 60 s each.

@@ -312,3 +312,10 @@ ringing, apparently from the Show itself.
 **Found on the way.** The first test run hung for 10 minutes: the first `timers` message was not sent when
 there were no timers (an empty list compared equal to "nothing sent yet"), and a test waited for it forever.
 The feed now always sends the first list, and `tests/run.sh` gives each test 60 s (`--timeout 60`).
+
+## 11. Listening animation
+
+Words cannot appear while you speak (section 2, and no partial speech-to-text in Home Assistant 2026.10.4),
+and the Echo does not send its sound level to Home Assistant, so nothing on the page can follow the voice.
+*Decision (user):* voice bars, seven bars beside "Listening…", each bouncing at its own pace (0.47–0.83 s,
+`transform: scaleY` only). Checked in the demo; on the Show by the user.
