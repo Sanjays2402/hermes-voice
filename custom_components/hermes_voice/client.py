@@ -276,10 +276,12 @@ class HermesClient:
                     choice = choices[0] if isinstance(choices[0], dict) else {}
                     delta = choice.get("delta") or {}
                     finish = choice.get("finish_reason")
-                    if finish not in (None, "stop"):
-                        _raise_if_failed(
-                            frame.get("hermes") or {"failed": True}, "error", frame.get("error"), hermes_error
-                        )
+                    if finish is not None:
+                        # Same failure check as the JSON path: only a failed run
+                        # (hermes.failed, or finish_reason "error") fails the turn.
+                        # A benign finish such as "length" keeps the text already
+                        # streamed instead of discarding it as a failure.
+                        _raise_if_failed(frame.get("hermes") or {}, finish, frame.get("error"), hermes_error)
                     text = delta.get("content") if isinstance(delta, dict) else None
                     if text:
                         if not got_text:
