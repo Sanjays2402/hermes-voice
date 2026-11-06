@@ -84,7 +84,39 @@ def clean_for_voice(text: str) -> str:
     text = _SPACES.sub(" ", text)
     text = re.sub(r"\s+([.,!?;:])", r"\1", text)
     text = re.sub(r"([.!?])\.+", r"\1", text)
-    return text.strip()
+    return unsay_wake_word(text.strip())
+
+
+# The wake word's name, said aloud by the speaker itself, wakes it: microWakeWord on an Echo (echo-dot-assist)
+# keeps listening while the Echo speaks and has no echo suppression for its own voice. Seen on an Echo Show 5:
+# "...the latest Hermes Agent release..." started a new turn in the middle of the reply. The spoken text says
+# something else; the screen keeps the real words.
+_NAME_SWAPS = (
+    (re.compile(r"\b(?:hey|okay|ok) hermes\b", re.IGNORECASE), "the wake word"),
+    (re.compile(r"\bhermes voice\b", re.IGNORECASE), "the voice setup"),
+    # after "the", "latest", ... just "agent": "the latest Hermes Agent release" -> "the latest agent release"
+    (
+        re.compile(
+            r"\b(the|this|that|a|an|latest|newest|new|old|your|my|our)\s+hermes(?:\s+agent)?\b", re.IGNORECASE
+        ),
+        r"\1 agent",
+    ),
+    (re.compile(r"\bhermes agent\b", re.IGNORECASE), "the agent"),
+    (re.compile(r"\bhermes(?:['\u2019]s|['\u2019])", re.IGNORECASE), "the agent's"),
+    (re.compile(r"\bhermes\b", re.IGNORECASE), "the agent"),
+)
+
+
+def unsay_wake_word(text: str) -> str:
+    """Replace the assistant's own name in text that will be spoken (see _NAME_SWAPS)."""
+    for pattern, spoken in _NAME_SWAPS:
+        text = pattern.sub(spoken, text)
+    # "the agent" at the start of a sentence gets its capital back.
+    return re.sub(
+        r"(^|[.!?]\s+)(the (?:agent|voice setup|wake word))",
+        lambda m: m.group(1) + m.group(2)[0].upper() + m.group(2)[1:],
+        text,
+    )
 
 
 # Sentence ends and paragraph breaks. Single line breaks are left to clean_for_voice, which

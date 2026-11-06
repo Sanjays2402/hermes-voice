@@ -319,3 +319,38 @@ Words cannot appear while you speak (section 2, and no partial speech-to-text in
 and the Echo does not send its sound level to Home Assistant, so nothing on the page can follow the voice.
 *Decision (user):* voice bars, seven bars beside "Listening…", each bouncing at its own pace (0.47–0.83 s,
 `transform: scaleY` only). Checked in the demo; on the Show by the user.
+
+## 12. Speed: measured, changed, measured again
+
+Timings from Home Assistant's pipeline debug (`assist_pipeline/pipeline_debug/get`; kept in memory, so they
+start empty after a restart) and the voice profile's `agent.log`. Same question, "How did we rescue the Echo
+Dot?", seconds from the wake word:
+
+| Stage | Before | Aggressive end of speech + persona | + blank lines, 60-char first sentence |
+|---|---|---|---|
+| speaking + end-of-speech wait | 3.9 | 2.6 | 2.9 |
+| speech-to-text (Parakeet) | 0.27 | 0.18 | 0.19 |
+| to Hermes' first sentence | 3.0 | 2.5 | 2.6 |
+| voice starts (HA `tts_start_streaming`) | 8.8 | 8.0 (waited 1.0 s for 60 chars) | 7.3 |
+
+Findings:
+- **Hermes is about 3 s of a 9-10 s turn**: 0.6-0.7 s from speech-to-text to Hermes starting the turn, 1.6 s
+  to the model's first words (gpt-6.1-sol, reasoning low), 0.7 s more to the end of the first sentence.
+- **End of speech**: the Echo's "finished speaking detection" set to aggressive cut about 1.3 s for the same
+  sentence. Two mishearings appeared in the same session ("the Dapples", "Hermes agent book"); the user
+  mumbles, so not attributed to the setting.
+- **Home Assistant starts streaming speech only after 60 characters** (`STREAM_RESPONSE_CHARS`), so a short
+  first sentence waits for the second. The persona asks for a first sentence of ten to fifteen words.
+- **Piper speaks a sentence only when the next one starts** (Wyoming Piper's `SentenceBoundaryDetector`: a
+  boundary needs the next sentence's capital letter, or a blank line). Speech ran a sentence or two behind,
+  the screen showed the whole answer before any sound, and "One moment." stayed silent through a web search.
+  Each spoken piece now ends with a blank line (voice cleanup on only: with it off, pieces are tokens).
+- **Speak at the first comma was dropped**: Piper would hold the clause until the sentence ends anyway.
+- **Parakeet ignores an initial prompt** (the server's sherpa handler accepts and drops it), so names cannot
+  be primed without switching to a Whisper model.
+- **The speaker woke itself** mid-reply, saying "the latest Hermes Agent release": microWakeWord on the Echo
+  keeps listening while it speaks (echo-dot-assist's guide lists this). Spoken text now swaps the name and
+  the persona says "I".
+- **Fast, jumbled playback** of the first sentence or two happens now and then (the user: perhaps one in twenty
+  replies; seen on the Dot before these changes). Not reproduced on demand; to be traced from the pipeline
+  record of the next occurrence.

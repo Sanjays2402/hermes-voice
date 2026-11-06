@@ -40,3 +40,20 @@ def test_clean_for_voice(raw: str, expected: str) -> None:
 def test_only_code_returns_empty() -> None:
     """Pure code yields empty text (the entity then falls back to the raw stripped text)."""
     assert clean_for_voice("```\nx=1\n```") == ""
+
+
+@pytest.mark.parametrize(
+    ("text", "spoken"),
+    [
+        ("The latest Hermes Agent release is 0.23.", "The latest agent release is 0.23."),
+        ("Ask the Hermes profile.", "Ask the agent profile."),
+        ("Hermes can search the web.", "The agent can search the web."),
+        ("Say Hey Hermes to start.", "Say the wake word to start."),
+        ("This is Hermes Voice.", "This is the voice setup."),
+        ("Hermes' tools and Hermes\u2019s memory.", "The agent's tools and the agent's memory."),
+        ("Thermes and Hermesian stay.", "Thermes and Hermesian stay."),
+    ],
+)
+def test_wake_word_not_spoken(text: str, spoken: str) -> None:
+    """The speaker must not say its own wake word: it would wake itself (microWakeWord on an Echo)."""
+    assert clean_for_voice(text) == spoken
