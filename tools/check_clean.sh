@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fail if the repository (current files AND every commit in its history) holds personal or secret data:
 # home/drive paths, e-mail addresses, LAN addresses other than the documentation examples, keys/tokens,
-# or commit authors that are not GitHub noreply addresses. Run before publishing; tools/build_release.sh runs it.
+# or commit authors that are not GitHub noreply addresses (GitHub's own noreply@github.com, used for merges made on github.com, is fine). Run before publishing; tools/build_release.sh runs it.
 set -uo pipefail
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 SELF=tools/check_clean.sh
@@ -25,7 +25,7 @@ for entry in "${PATTERNS[@]}"; do
   fi
 done
 
-bad_ids=$(git log --all --format='%ae%n%ce' | sort -u | grep -v '@users\.noreply\.github\.com$' || true)
+bad_ids=$(git log --all --format='%ae%n%ce' | sort -u | grep -v -E '(@users\.noreply\.github\.com|^noreply@github\.com)$' || true)
 if [ -n "$bad_ids" ]; then
   echo "FOUND commit author/committer e-mail that is not a GitHub noreply address:"; echo "$bad_ids"; fail=1
 fi
