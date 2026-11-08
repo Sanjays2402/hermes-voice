@@ -115,6 +115,12 @@ Opt-in, made by `screen_activity.py --next-up on`.
 | A scheduled job *Hermes Voice: next up* in the voice profile (four short model calls a day; the answer stays local) and the read-only script `scripts/hermes_voice_next_up.py` in the profile | `python3 skill/hermes-voice-setup/scripts/screen_activity.py --profile <profile> --next-up off` (removes both), or `hermes -p <profile> cron remove <id>` |
 | The profile's scheduled jobs limited to the `todo` toolset (they had every tool, terminal and computer use included). `config.yaml` is backed up to `hermes-voice-backups/` first | Restore `config.yaml` from that backup, or `hermes -p <profile> tools enable --platform cron <toolsets>`. `--next-up off` leaves the limit in place, since it is the safer setting |
 
+### The camera's look tool (`eye_setup.py`, Echo Show)
+
+| What | Undo |
+|---|---|
+| `scripts/eye_mcp.py` in the profile, `mcp_servers.eye` in its `config.yaml`, `HERMES_EYE_TOKEN` in its `.env` (all three backed up first under `hermes-voice-backups/<time>-eye/`) | `hermes -p <profile> mcp remove eye`, delete the `HERMES_EYE_TOKEN` line, `hermes -p <profile> gateway restart` (or copy the backups back) |
+
 ### The task board
 
 Hermes Voice never writes to it. If you made display-only tasks for a demo, create them with
@@ -130,6 +136,7 @@ itself) and remove them with `hermes kanban archive <id> ...`.
 | The Hermes Screen app (Echo Show) | The settings page → Screen → pick the face; then `adb uninstall org.hermesvoice.screen` (debug access: the settings page → System → Debug access) |
 | Kiosk Satellite, if you said yes to it in echo-dot-assist's setup | Removed the way echo-dot-assist's README describes; the face comes back on the Screen page |
 | Debug access (adb over Wi-Fi) | Closes by itself after 30 minutes |
+| Hermes Eye, the camera app (Echo Show, `org.hermesvoice.eye`): camera and overlay permission, its token in the app's own folder, a service on TCP 28940 that starts at boot | `python3 skill/hermes-voice-setup/scripts/eye_setup.py --uninstall` (or `adb uninstall org.hermesvoice.eye`): removes the app, its permissions and token |
 
 ## Your own computer
 
@@ -137,3 +144,4 @@ itself) and remove them with `hermes kanban archive <id> ...`.
 |---|---|
 | Building the screen app: a JDK and the Android SDK (`devices/echo/screen-app/build.sh` lists them; accepting Google's SDK license) | Uninstall them with the tool you used (for example `brew uninstall openjdk@17` and `brew uninstall --cask android-commandlinetools`) |
 | The app's signing key, `devices/echo/screen-app/build/screen.keystore` (not in git) | Keep it if you want to update the installed app; without it, uninstall and reinstall |
+| Hermes Eye's build folder and signing key, `~/.config/hermes-voice/eye-build/` (made on the first build), and the camera token `~/.config/hermes-voice/secrets/eye_token` | Delete them. Losing the key only means the next setup needs `--reinstall` |

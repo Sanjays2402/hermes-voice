@@ -1,7 +1,7 @@
 ---
 name: hermes-voice-setup
 description: Turn one Hermes profile into a voice assistant through Home Assistant Assist (hermes_voice integration), with an Echo Dot or Echo Show as the speaker.
-version: 0.1.0
+version: 0.2.0
 author: hermes-voice contributors
 license: MIT
 platforms: [macos, linux]
@@ -40,6 +40,7 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 | Background work on an Echo Show's screen | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --install` |
 | Next up suggestion on the screen (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --next-up on` (`off` to remove) |
 | Show every profile's work (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --screen-activity all` |
+| Camera for Hermes (Echo Show): check / install | `python3 ${HERMES_SKILL_DIR}/scripts/eye_setup.py --check` / `--profile voice` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
 | What it changes, and how to undo each (read before removing anything) | `${HERMES_SKILL_DIR}/references/changes-and-undo.md` |
 
@@ -129,7 +130,24 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
    If the user wants suggestions on the screen ("tell me what to do next"), explain the *next up* job (one
    short model call four times a day; it limits the voice profile's scheduled jobs to the `todo` toolset)
    and on their yes run `screen_activity.py --profile voice --next-up on`.
-5. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
+5. **Camera (optional, Echo Show).** Offer Hermes Eye: Hermes can look through the Show's camera ("what am
+   I holding?") and the user can talk in *video mode*, their live picture in a corner of the screen. Tell
+   them first:
+   - A **● REC** badge shows whenever the camera is on.
+   - The shutter and the mute button always win.
+   - Pictures go only to the voice profile's model, and nothing is stored.
+   - It installs one app on the Echo over USB.
+
+   On their yes:
+   - Run `eye_setup.py --check`. If the JDK or the Android SDK is missing, show the install commands it
+     prints, and run them only after the user agrees (about 1 GB, once).
+   - Run `eye_setup.py --profile voice --dry-run`, then `eye_setup.py --profile voice`. It builds the app
+     on this computer, with a signing key made here on the first build; there's nothing to download or
+     sign by hand. It installs the app on the Echo, gives it a token, adds the `look` tool to the
+     profile (backed up first), restarts the gateway, and takes a test picture.
+   - If it says the app was signed with another key, rerun it with `--reinstall`.
+   - The Echo must be plugged into this computer by USB, with echo-dot-assist's root adb.
+6. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
    With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
    Success = a reply in the profile's own voice/personality and `"recalled": true`.
 

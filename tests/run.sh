@@ -4,12 +4,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="hermes-voice-test:2026.10.4"
-# The skill carries its own copy of the integration and wake word model (tools/sync_skill_assets.sh).
+# The skill carries its own copy of the integration, wake word model and Hermes Eye (tools/sync_skill_assets.sh).
 ASSETS="$ROOT/skill/hermes-voice-setup/assets"
 if ! diff -rq -x __pycache__ "$ROOT/custom_components/hermes_voice" "$ASSETS/hermes_voice" >/dev/null ||
    ! cmp -s "$ROOT/wakeword/model/hey_hermes.tflite" "$ASSETS/wakeword/hey_hermes.tflite" ||
    ! cmp -s "$ROOT/wakeword/model/hey_hermes.json" "$ASSETS/wakeword/hey_hermes.json" ||
-   ! cmp -s "$ROOT/wakeword/model/MODEL_NOTICE.md" "$ASSETS/wakeword/MODEL_NOTICE.md"; then
+   ! cmp -s "$ROOT/wakeword/model/MODEL_NOTICE.md" "$ASSETS/wakeword/MODEL_NOTICE.md" ||
+   ! diff -rq -x build -x .gitignore "$ROOT/devices/echo/eye-app" "$ASSETS/eye/app" >/dev/null ||
+   ! cmp -s "$ROOT/extras/eye/eye_mcp.py" "$ASSETS/eye/eye_mcp.py"; then
   echo "skill assets are out of date: run tools/sync_skill_assets.sh" >&2
   exit 1
 fi
