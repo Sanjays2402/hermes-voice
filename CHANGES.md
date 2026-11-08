@@ -1,6 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-08
+
+- Hermes Eye (`devices/echo/eye-app`, [docs/eye.md](docs/eye.md)): the Echo Show's camera for a vision
+  service on the LAN. A 21 KB app with no screen. It serves snapshots and MJPEG with a token, opens the
+  camera only on request, shows a "● REC" badge while the camera is open, and answers "covered" for a
+  closed shutter and "blocked" when the mute button cuts the camera. Installed over USB ADB; no firmware
+  change.
+- Setup skill 0.2.0: an optional camera step. `eye_setup.py` builds Hermes Eye on the user's own computer,
+  signed with a key it makes there, so there's no prebuilt app to trust and no shared key. It installs the
+  app over USB, gives it a token, connects `look` to the voice profile (backed up first) and takes a test
+  picture. `--reinstall` covers a lost key.
+- Recipes on the Hermes screen, from Mealie: `extras/mealie` is a small MCP server (six tools: search and
+  read recipes, the meal plan, the shopping list; nothing that deletes) for a Hermes profile. Recipes
+  Hermes reads open on the screen of the device that asked; searches show photo cards. A cooking view shows
+  one step at a time with Back/Next, swipes, a step timer button and an ingredient checklist. While a
+  recipe is open, "next step", "back", "step 4", "ingredients" and "close the recipe" are answered by Home
+  Assistant at once, and other questions reach Hermes with the recipe and step on screen. Uses Home
+  Assistant's Mealie integration (`recipes.py`).
+- Hermes screen: tools from connected MCP servers show a plain name ("Opening the recipe", or the tool's
+  name without the `mcp__server__` prefix), and a tool keeps its label when it finishes. Hermes Eye's `look`
+  shows as "Looking through the camera".
+- Video mode ([docs/eye.md](docs/eye.md#video-mode)): the user's live picture in a corner of the Hermes
+  screen while they talk. It turns on by voice ("video mode") or when Hermes looks, and Hermes is told while
+  it's on. After three replies without the camera, the screen asks "Done with the camera?". It ends by voice
+  ("stop video"), by button, after 5 idle minutes, or when the shutter or mute cuts the camera. `look`
+  (extras/eye) and Hermes Eye 0.4.1 (live window, `/video`).
+- Hermes screen: if the voice hasn't started 3 s after a reply is complete (no speech, a failed voice, a
+  typed turn), the whole reply shows instead of staying blank.
 
 - Streamed replies cut off by the token limit retain the partial reply instead of adding the failure
   fallback (#3). The setup skill carries the same client fix.
