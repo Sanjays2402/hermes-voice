@@ -161,7 +161,12 @@ class HermesClient:
             raise HermesTimeoutError("timeout listing models") from err
         except (aiohttp.ClientError, ValueError) as err:
             raise HermesConnectionError(str(err)) from err
-        return [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
+        if not isinstance(data, dict):
+            raise HermesConnectionError("unexpected response listing models")
+        rows = data.get("data", [])
+        if not isinstance(rows, list):
+            raise HermesConnectionError("unexpected response listing models")
+        return [m["id"] for m in rows if isinstance(m, dict) and "id" in m]
 
     async def async_get_json(self, path: str, request_timeout: float = 5) -> Any:
         """GET a read-only path on the gateway root (``/api/jobs``, ...), or a full URL with the same key."""
@@ -272,10 +277,16 @@ class HermesClient:
                         continue
                     if event:
                         continue  # other Hermes events (status, approval) are not spoken
-                    choices = frame.get("choices") or [{}]
-                    choice = choices[0] if isinstance(choices[0], dict) else {}
-                    delta = choice.get("delta") or {}
-                    finish = choice.get("finish_reason")
+                    try:
+                        choices = frame.get("choices") or [{}]
+                        choice = choices[0] if isinstance(choices[0], dict) else {}
+                        delta = choice.get("delta") or {}
+                        finish = choice.get("finish_reason")
+                    except (KeyError, IndexError, TypeError, AttributeError) as err:
+                        # Same as the JSON path (_reply_from_json): a frame that
+                        # is not shaped like a chat completion chunk fails the
+                        # turn instead of raising a raw exception.
+                        raise HermesAgentError("malformed response") from err
                     if finish is not None:
                         # Same failure check as the JSON path: only a failed run
                         # (hermes.failed, or finish_reason "error") fails the turn.

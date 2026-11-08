@@ -127,6 +127,14 @@ async def test_user_flow_no_models(hass: HomeAssistant, aioclient_mock: AiohttpC
     assert r["errors"] == {"base": "no_models"}
 
 
+async def test_user_flow_models_wrong_shape(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    """A /models body that is not an object -> cannot_connect, not a crash."""
+    aioclient_mock.get(f"{BASE}/models", json=[])
+    r = await _start(hass)
+    r = await hass.config_entries.flow.async_configure(r["flow_id"], {CONF_BASE_URL: BASE, CONF_API_KEY: KEY})
+    assert r["errors"] == {"base": "cannot_connect"}
+
+
 async def test_user_flow_invalid_url(hass: HomeAssistant) -> None:
     """Non-http URL is rejected before any request."""
     r = await _start(hass)
