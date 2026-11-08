@@ -3,6 +3,7 @@
  * Talks to Home Assistant over its websocket and the two commands hermes_voice adds:
  *   hermes_voice/screen/subscribe   the Echo's state, what was heard, Hermes' reply as it is written, its tools
  *   hermes_voice/screen/overview    scheduled jobs, recent sessions, gateway status
+ *   hermes_voice/screen/cook, /recipes, /start_timer   recipes from Mealie: open, steps, ingredients, timers
  *
  * URL options:
  *   ?device=<device id>   follow one voice device (default: every device, the one that spoke last)
@@ -12,7 +13,8 @@
  *   ?avatar=<url>         a picture to use instead of the default avatar
  *   ?eyes=<x>,<y>         where the eyes are in that picture (fractions, e.g. 0.5,0.4): the idle screen zooms there
  *   ?zoom=<n>             how far the idle screen zooms in (default 8)
- *   ?demo                 play a scripted conversation, no Home Assistant needed (?demo=idle: stay idle)
+ *   ?demo                 play a scripted conversation, no Home Assistant needed (?demo=idle: stay idle,
+ *                         ?demo=cook: a recipe to cook, ?demo=recipes: the recipe browser)
  */
 (() => {
   "use strict";
@@ -45,6 +47,8 @@
     overviewAt: 0,
     devices: {}, // device id -> {mute, dnd, ringing, ringing_names, can_stop, can_retry} (hassmic's controls)
     timers: [], // running and paused voice timers of the followed device(s)
+    video: { on: false, asked: false }, // video mode on this screen's device (video.py)
+    cook: null, // the recipe open on the followed device: {recipe, view, step, checked}
   };
 
   function emptyTurn() {
@@ -109,10 +113,19 @@
     cronjob: "Scheduling",
     delegate_task: "Handing off a task",
     todo: "Updating the plan",
+    // Tools from a connected (MCP) server are named mcp__<server>__<tool>; looked up without the prefix.
+    search_recipes: "Searching recipes",
+    get_recipe: "Opening the recipe",
+    meal_plan: "Checking the meal plan",
+    add_to_meal_plan: "Adding to the meal plan",
+    shopping_list: "Checking the shopping list",
+    add_to_shopping_list: "Adding to the shopping list",
+    look: "Looking through the camera",
   };
 
   function toolText(tool) {
-    const name = TOOL_NAMES[tool.tool] || "Using " + String(tool.tool || "a tool").replace(/_/g, " ");
+    const id = String(tool.tool || "a tool").replace(/^mcp__[^_]+(?:_[^_]+)*__/, "");
+    const name = TOOL_NAMES[id] || "Using " + id.replace(/_/g, " ");
     return name + (tool.done ? "" : "…");
   }
 
@@ -127,13 +140,16 @@
   // 15-20 s to say it, and a screen that races ahead reads as "printed, then spoken". Measured on the
   // Echo Show 5 with Piper "ryan": about 13.5 characters a second, first sound about 0.6 s after the
   // voice starts (the satellite turns "responding"). Text Home Assistant answered itself, typed turns and
-  // a finished reply show at once.
+  // a finished reply show at once. If the voice has not started SPEAK_WAIT_MS after the reply is complete
+  // (no speech, a failed voice, a turn typed into the pipeline), the whole reply shows: never a blank answer.
   const SPEAK_RATE = 13.5;
   const SPEAK_LEAD_MS = 600;
+  const SPEAK_WAIT_MS = 3000;
   function visibleText(t) {
     const dev = state.device || state.focus;
     if (t.by === "home_assistant" || t.spoken || state.satellite[dev] === undefined) return t.reply;
-    if (!t.speakAt || !t.firstTextAt) return "";
+    if (!t.speakAt) return t.doneAt && Date.now() - t.doneAt > SPEAK_WAIT_MS ? t.reply : "";
+    if (!t.firstTextAt) return "";
     const start = Math.max(t.speakAt, t.firstTextAt) + SPEAK_LEAD_MS;
     const n = Math.floor(((Date.now() - start) / 1000) * SPEAK_RATE);
     if (n <= 0) return "";
@@ -175,6 +191,7 @@
       reply.innerHTML = (t.by === "home_assistant" ? '<div class="by-ha">Home Assistant</div>' : "") + markdown(visibleText(t));
     }
     fitReply();
+    renderStrip();
   }
 
   /** Largest font that fits; while it is written, keep the newest words in view. */
@@ -253,6 +270,7 @@
     $("context").innerHTML = contextLine();
     if (connected && (state.mode === "idle" || !$("overview").hidden)) refreshOverview(false);
     if (state.holdUntil && Date.now() >= state.holdUntil) { state.holdUntil = 0; updateMode(); }
+    renderCookTimers();
   }
 
   const escHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
@@ -349,6 +367,42 @@
     call({ type: "hermes_voice/screen/stop_timer", device_id: id }).catch(() => {});
   });
 
+  // ------------------------------------------------------------------------------------ video --
+  // Video mode: the user's live picture in the bottom-right corner, drawn on the Echo by the Hermes Eye
+  // app (docs/eye.md). Only the page that belongs to a device drives it, over loopback on that Echo; Home
+  // Assistant decides when it is on (video.py). The Echo ends it by itself when the shutter closes, the
+  // camera is cut off, or this page stops saying "keep" (EYE_KEEP_MS): then Home Assistant hears why.
+  const EYE = params.get("eye") || "http://127.0.0.1:28940";
+  const EYE_KEEP_MS = 20000;
+  function setVideo(on, asked) {
+    const was = state.video.on;
+    state.video = { on, asked: on && asked };
+    body.dataset.video = on ? "1" : "";
+    $("video-ask").hidden = !state.video.asked;
+    if (on !== was) eyeVideo(on ? "1" : "0");
+  }
+  function eyeVideo(on) {
+    if (DEMO || !state.device) return;
+    fetch(EYE + "/video?on=" + on, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!state.video.on || j.video) return;
+        if (["covered", "blocked", "timeout"].includes(j.reason)) {
+          videoAction("off", j.reason); // the Echo ended it: tell Home Assistant, which tells every screen
+        } else if (on === "keep") {
+          eyeVideo("1"); // the Echo app restarted: turn it back on
+        }
+      })
+      .catch(() => { /* not on an Echo with Hermes Eye: nothing to drive */ });
+  }
+  function videoAction(action, why) {
+    if (!state.device) return;
+    call({ type: "hermes_voice/screen/video", device_id: state.device, action, why }).catch(() => {});
+  }
+  setInterval(() => { if (state.video.on) eyeVideo("keep"); }, EYE_KEEP_MS);
+  $("va-off").addEventListener("click", () => videoAction("off", "screen"));
+  $("va-keep").addEventListener("click", () => videoAction("keep", "screen"));
+
   // ---------------------------------------------------------------------------- feed handling --
   function onEvent(ev) {
     const dev = ev.device_id === undefined ? null : ev.device_id;
@@ -361,6 +415,11 @@
       Object.assign(state.satellite, ev.states || {});
       const turns = ev.turns || {};
       const key = state.device || latestDevice(turns);
+      const cooks = ev.cook || {};
+      state.cook = cooks[state.device || key] || Object.values(cooks)[0] || null;
+      renderCook();
+      const v = (ev.video || {})[state.device];
+      setVideo(!!v, !!(v && v.asked));
       if (turns[key] !== undefined) {
         const t = turns[key];
         state.turn = { ...emptyTurn(), ...t, tools: (t.tools || []).map((x) => ({ ...x, done: !x.running })), at: (t.at || 0) * 1000, spoken: true };
@@ -394,6 +453,18 @@
       }
       return updateMode();
     }
+    if (ev.type === "cook") {
+      if (!state.device || dev === state.device) { state.cook = ev.cook || null; renderCook(); }
+      return;
+    }
+    if (ev.type === "video") {
+      if (state.device && dev === state.device) setVideo(!!ev.on, ev.ask ? true : ev.why === "keep" ? false : state.video.asked);
+      return;
+    }
+    if (ev.type === "recipes") {
+      if (!state.device || dev === state.device) openPicker(ev.title, ev.items || [], null);
+      return;
+    }
     if (!state.device) state.focus = dev; // following every device: show the one that is talking
     const t = state.turn;
     switch (ev.type) {
@@ -416,10 +487,11 @@
         t.reply = ev.text || t.reply;
         t.tools = t.tools.map((x) => ({ ...x, done: true }));
         t.phase = "done";
+        t.doneAt = Date.now();
         state.holdUntil = Date.now() + holdMs;
         break;
       case "local_answer":
-        state.turn = { ...emptyTurn(), heard: ev.heard || "", reply: ev.text || "", phase: "done", by: "home_assistant", at: Date.now() };
+        state.turn = { ...emptyTurn(), heard: ev.heard || "", reply: ev.text || "", phase: "done", by: "home_assistant", at: Date.now(), cook: !!ev.cook };
         state.holdUntil = Date.now() + holdMs;
         break;
       case "cancelled":
@@ -681,6 +753,7 @@
     openOverview();
   });
   $("ov-back").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); });
+  $("ov-recipes").addEventListener("click", (e) => { e.stopPropagation(); closeOverview(); browseRecipes(); });
 
   // Screen brightness, the whole screen. In the Hermes Screen app it sets the backlight (remembered by the
   // app); in a browser it dims the page (remembered by the browser). Low enough for a bedside table.
@@ -783,6 +856,329 @@
   }
   new MutationObserver(applyAvatar).observe(body, { attributes: true, attributeFilter: ["data-mode"] });
 
+  // ---------------------------------------------------------------------------------- recipes --
+  // A recipe from Mealie (recipes.py): a card, the ingredients to tick off, and the steps one at a time,
+  // big enough to read from the counter. Home Assistant keeps which recipe and step a device has open, so
+  // "next step" said to the Echo and a tap here move the same thing. Hermes opens recipes it reads.
+  const CARD_IDLE_MS = 10 * 60 * 1000; // a recipe card nobody is cooking from closes itself
+  const PICKER_IDLE_MS = 3 * 60 * 1000;
+  let cardTimer = null;
+  let pickerTimer = null;
+
+  const cookDevice = () => state.device || state.focus || (DEMO ? "demo" : null);
+
+  /** Ask Home Assistant to change what is open; the change comes back as a "cook" event to every screen. */
+  function cookAction(msg) {
+    if (DEMO) return Promise.resolve(demoCookAction(msg));
+    return call({ type: "hermes_voice/screen/cook", device_id: cookDevice(), ...msg }).then((cook) => {
+      if (msg.action !== "close" && cook) { state.cook = cook; renderCook(); }
+    });
+  }
+
+  function minutesText(sec) {
+    if (sec >= 3600) { const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60); return h + " h" + (m ? " " + m + " min" : ""); }
+    if (sec >= 60) return Math.round(sec / 60) + " min";
+    return sec + " s";
+  }
+
+  function chips(recipe) {
+    const t = recipe.times || {};
+    return [
+      t.prep && ["Prep", t.prep],
+      t.cook && ["Cook", t.cook],
+      t.total && ["Total", t.total],
+      recipe.servings && ["Makes", recipe.servings],
+    ].filter(Boolean);
+  }
+
+  function photo(el, url) {
+    el.style.backgroundImage = url ? `url("${url}")` : "";
+    el.classList.toggle("none", !url);
+  }
+
+  function renderCook() {
+    const c = state.cook;
+    $("cook").hidden = !c;
+    clearTimeout(cardTimer);
+    if (!c) return;
+    closeOverview();
+    $("picker").hidden = true;
+    const r = c.recipe || {};
+    body.dataset.cookView = c.view;
+    $("ck-title").textContent = r.name || "Recipe";
+    for (const b of $("ck-tabs").children) b.classList.toggle("on", b.dataset.view === c.view);
+    $("ck-card").hidden = c.view !== "card";
+    $("ck-ingredients").hidden = c.view !== "ingredients";
+    $("ck-steps").hidden = c.view !== "steps";
+    if (c.view === "card") {
+      photo($("ck-photo"), r.image);
+      $("ck-desc").textContent = r.description || "";
+      const counts = [r.ingredients && r.ingredients.length && r.ingredients.length + " ingredients", r.steps && r.steps.length && r.steps.length + " steps"].filter(Boolean);
+      $("ck-chips").innerHTML =
+        chips(r).map(([k, v]) => `<span class="chip"><small>${k}</small> ${escHtml(v)}</span>`).join("") +
+        (counts.length ? `<span class="chip plain">${counts.join(" · ")}</span>` : "");
+      $("ck-start").hidden = !(r.steps && r.steps.length);
+      cardTimer = setTimeout(() => cookAction({ action: "close" }).catch(() => {}), CARD_IDLE_MS);
+    } else if (c.view === "ingredients") {
+      renderIngredients(r, c.checked || []);
+    } else {
+      renderStep(r, c.step || 0);
+    }
+    renderCookTimers();
+    renderStrip();
+  }
+
+  function renderIngredients(r, checked) {
+    const el = $("ck-ingredients");
+    const items = r.ingredients || [];
+    if (!items.length) { el.innerHTML = '<p class="ck-empty">This recipe has no ingredient list.</p>'; return; }
+    let section = null;
+    const html = [];
+    items.forEach((ing, i) => {
+      if (ing.section && ing.section !== section) { section = ing.section; html.push(`<h3>${escHtml(section)}</h3>`); }
+      html.push(`<button class="ing${checked.includes(i) ? " got" : ""}" data-i="${i}"><i></i><span>${escHtml(ing.text)}</span></button>`);
+    });
+    el.innerHTML = html.join("");
+  }
+
+  function renderStep(r, step) {
+    const steps = r.steps || [];
+    if (!steps.length) { $("ck-step-text").textContent = "This recipe has no steps."; return; }
+    const i = Math.max(0, Math.min(step, steps.length - 1));
+    const st = steps[i];
+    $("ck-step-no").textContent = `Step ${i + 1} of ${steps.length}`;
+    $("ck-section").textContent = st.section || "";
+    $("ck-bar").style.transform = `scaleX(${(i + 1) / steps.length})`;
+    const text = $("ck-step-text");
+    text.textContent = st.text;
+    fitText(text, 40, 22);
+    $("ck-prev").disabled = i === 0;
+    $("ck-next").textContent = i === steps.length - 1 ? "Done ✓" : "Next ›";
+    const tb = $("ck-timer-btn");
+    tb.hidden = !st.seconds;
+    if (st.seconds) {
+      tb.textContent = "⏱ " + minutesText(st.seconds) + " timer";
+      tb.dataset.seconds = st.seconds;
+      tb.dataset.name = (st.section || r.name || "").slice(0, 40);
+    }
+  }
+
+  /** Largest font size that fits the box. */
+  function fitText(el, max, min) {
+    let size = max;
+    el.style.fontSize = size + "px";
+    while (el.scrollHeight > el.clientHeight + 1 && size > min) {
+      size -= 2;
+      el.style.fontSize = size + "px";
+    }
+  }
+
+  /** Running voice timers in the recipe's header: you are cooking, they matter. */
+  function renderCookTimers() {
+    if ($("cook").hidden) return;
+    $("ck-timers").innerHTML = state.timers
+      .slice(0, 2)
+      .map((t) => {
+        const left = t.active && t.ends_at ? t.ends_at - Date.now() / 1000 : t.left;
+        return `<span class="ck-timer${t.active ? "" : " paused"}">⏱ ${clock(left)}</span>`;
+      })
+      .join("");
+  }
+
+  /** While the Echo listens, thinks or answers, one line over the recipe says so (the recipe stays up). */
+  function renderStrip() {
+    const busy = ["listening", "thinking", "answering", "done", "error"].includes(state.mode);
+    const t = state.turn;
+    let text = "";
+    if (state.mode === "listening") text = "Listening…";
+    else if (state.mode === "thinking") text = t.heard ? `“${t.heard}”` : "Thinking…";
+    else if (state.mode === "error") text = "Hermes could not answer this time.";
+    else if (busy) text = (t.heard ? `“${t.heard}”  ` : "") + (t.cook ? "" : visibleText(t).replace(/[*_`#]/g, ""));
+    for (const id of ["ck", "pk"]) {
+      $(id + "-voice").classList.toggle("on", busy && !!text);
+      $(id + "-voice-text").textContent = text;
+    }
+  }
+
+  // Taps and swipes.
+  $("ck-close").addEventListener("click", () => cookAction({ action: "close" }).catch(() => {}));
+  $("ck-tabs").addEventListener("click", (e) => {
+    const view = e.target.dataset && e.target.dataset.view;
+    if (view && state.cook) {
+      state.cook = { ...state.cook, view };
+      renderCook();
+      cookAction({ action: "view", view }).catch(() => {});
+    }
+  });
+  $("ck-start").addEventListener("click", () => goStep(0));
+  $("ck-show-ing").addEventListener("click", () => {
+    state.cook = { ...state.cook, view: "ingredients" };
+    renderCook();
+    cookAction({ action: "view", view: "ingredients" }).catch(() => {});
+  });
+  $("ck-ingredients").addEventListener("click", (e) => {
+    const btn = e.target.closest(".ing");
+    if (!btn || !state.cook) return;
+    const i = Number(btn.dataset.i);
+    const checked = new Set(state.cook.checked || []);
+    const on = !checked.has(i);
+    on ? checked.add(i) : checked.delete(i);
+    state.cook = { ...state.cook, checked: [...checked] };
+    btn.classList.toggle("got", on);
+    cookAction({ action: "check", index: i, checked: on }).catch(() => {});
+  });
+  function goStep(i) {
+    const steps = (state.cook && state.cook.recipe.steps) || [];
+    if (!steps.length) return;
+    const step = Math.max(0, Math.min(i, steps.length - 1));
+    state.cook = { ...state.cook, view: "steps", step };
+    renderCook();
+    cookAction({ action: "step", step }).catch(() => {});
+  }
+  $("ck-prev").addEventListener("click", () => goStep((state.cook.step || 0) - 1));
+  $("ck-next").addEventListener("click", () => {
+    const steps = state.cook.recipe.steps || [];
+    if ((state.cook.step || 0) >= steps.length - 1) return cookAction({ action: "close" }).catch(() => {});
+    goStep((state.cook.step || 0) + 1);
+  });
+  $("ck-timer-btn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    const seconds = Number(btn.dataset.seconds);
+    const label = btn.textContent;
+    btn.textContent = "Starting…";
+    const done = (ok) => {
+      btn.textContent = ok ? "Timer started" : "Could not start a timer";
+      setTimeout(() => { btn.textContent = label; }, 2500);
+    };
+    if (DEMO) {
+      state.timers = [{ id: "d", name: btn.dataset.name, active: true, left: seconds, ends_at: Date.now() / 1000 + seconds }];
+      return done(true);
+    }
+    call({ type: "hermes_voice/screen/start_timer", device_id: cookDevice(), seconds, name: btn.dataset.name })
+      .then(() => done(true), () => done(false));
+  });
+  let touchX = null;
+  $("ck-steps").addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; }, { passive: true });
+  $("ck-steps").addEventListener("touchend", (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) < 70) return;
+    goStep((state.cook.step || 0) + (dx < 0 ? 1 : -1));
+  });
+  // The voice line over a recipe: tap to correct, as on the main screen.
+  for (const id of ["ck-voice", "pk-voice"]) {
+    $(id).addEventListener("click", () => {
+      if (followed().can_retry && ["thinking", "answering"].includes(state.mode)) correctTurn();
+    });
+  }
+
+  // The recipe browser: what Hermes found, or (from the overview) this week's meal plan and the newest recipes.
+  function openPicker(title, items, plan) {
+    const el = $("pk-scroll");
+    const card = (r, sub) =>
+      `<button class="pk-card" data-slug="${escHtml(r.slug)}">` +
+      `<div class="pk-photo${r.image ? "" : " none"}"${r.image ? ` style="background-image:url('${r.image}')"` : ""}></div>` +
+      `<div class="pk-name">${escHtml(r.name)}</div>` +
+      `<div class="pk-sub">${escHtml(sub || (r.times && (r.times.total || r.times.cook || r.times.prep)) || "")}</div></button>`;
+    const day = (iso) => {
+      const d = new Date(iso + "T12:00:00");
+      const today = new Date();
+      const diff = Math.round((d - new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12)) / 86400000);
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Tomorrow";
+      return new Intl.DateTimeFormat(state.locale, { weekday: "long" }).format(d);
+    };
+    const html = [];
+    const planned = (plan || []).filter((p) => p.recipe);
+    if (planned.length) {
+      html.push("<h3>On the meal plan</h3>", '<div class="pk-grid">', ...planned.map((p) => card(p.recipe, day(p.date) + " · " + p.meal)), "</div>");
+    }
+    if (items.length) {
+      html.push(`<h3>${title ? "Matches" : "Newest"}</h3>`, '<div class="pk-grid">', ...items.map((r) => card(r)), "</div>");
+    }
+    if (!html.length) html.push(`<p class="ck-empty">${title ? "No recipes match." : "No recipes yet."}</p>`);
+    el.innerHTML = html.join("");
+    el.scrollTop = 0;
+    $("pk-title").textContent = title ? `Recipes: “${title}”` : "Recipes";
+    $("picker").hidden = false;
+    renderStrip();
+    clearTimeout(pickerTimer);
+    pickerTimer = setTimeout(closePicker, PICKER_IDLE_MS);
+  }
+  function closePicker() {
+    $("picker").hidden = true;
+    clearTimeout(pickerTimer);
+  }
+  $("pk-back").addEventListener("click", closePicker);
+  $("pk-scroll").addEventListener("scroll", () => {
+    clearTimeout(pickerTimer);
+    pickerTimer = setTimeout(closePicker, PICKER_IDLE_MS);
+  }, { passive: true });
+  $("pk-scroll").addEventListener("click", (e) => {
+    const btn = e.target.closest(".pk-card");
+    if (!btn) return;
+    btn.classList.add("opening");
+    cookAction({ action: "open", recipe: btn.dataset.slug }).then(closePicker, () => btn.classList.remove("opening"));
+  });
+
+  async function browseRecipes() {
+    if (DEMO) return openPicker("", demoRecipes(), demoPlan());
+    openPicker("", [], []);
+    $("pk-scroll").innerHTML = '<p class="ck-empty">Loading…</p>';
+    try {
+      const res = await call({ type: "hermes_voice/screen/recipes" });
+      if (!res.available) {
+        $("pk-scroll").innerHTML = '<p class="ck-empty">Add Home Assistant’s Mealie integration to see your recipes here.</p>';
+        return;
+      }
+      openPicker("", res.items || [], res.plan || []);
+    } catch {
+      $("pk-scroll").innerHTML = '<p class="ck-empty">Could not load recipes.</p>';
+    }
+  }
+
+  // Demo: a made-up recipe and a local stand-in for Home Assistant.
+  function demoRecipe() {
+    return {
+      slug: "lemon-garlic-chicken-orzo", name: "Lemon Garlic Chicken & Orzo", image: null,
+      description: "Seared chicken thighs over lemony orzo with spinach and feta. One pan, weeknight fast.",
+      times: { prep: "10 min", cook: "25 min" }, servings: "4 servings",
+      ingredients: [
+        { text: "4 boneless chicken thighs", section: "" }, { text: "1 cup orzo", section: "" },
+        { text: "2 cups chicken broth", section: "" }, { text: "3 cloves garlic, minced", section: "" },
+        { text: "1 lemon, zested and juiced", section: "" }, { text: "2 handfuls baby spinach", section: "" },
+        { text: "½ cup crumbled feta", section: "" }, { text: "1 tbsp olive oil", section: "" },
+        { text: "Salt and pepper", section: "" },
+      ],
+      steps: [
+        { section: "Sear the chicken", text: "Pat the chicken dry and season both sides with salt and pepper. Heat the oil in a large pan over medium-high heat. Cook the chicken 5 to 6 minutes per side, until browned and cooked through. Move it to a plate.", seconds: 300 },
+        { section: "Toast the orzo", text: "Lower the heat to medium. Add the garlic and orzo to the same pan and stir for about 2 minutes, until the orzo smells nutty.", seconds: 120 },
+        { section: "Simmer", text: "Pour in the broth and lemon juice, scraping up the browned bits. Bring to a simmer, cover, and cook 10 minutes, stirring once halfway.", seconds: 600 },
+        { section: "Finish", text: "Stir in the spinach until it wilts. Slice the chicken and lay it on top, then scatter the feta and lemon zest. Serve warm.", seconds: null },
+      ],
+    };
+  }
+  function demoCook(view) {
+    state.cook = { recipe: demoRecipe(), view, step: 0, checked: [] };
+    renderCook();
+  }
+  function demoCookAction(msg) {
+    if (msg.action === "close") { state.cook = null; renderCook(); return null; }
+    if (msg.action === "open") { demoCook("card"); return state.cook; }
+    return state.cook;
+  }
+  function demoRecipes() {
+    const names = ["Lemon Garlic Chicken & Orzo", "Pork & Miso Ramen", "Sheet Pan Gnocchi", "Black Bean Tacos", "Tomato Basil Soup", "Crispy Chicken Parmesan", "Shrimp Fried Rice", "Mushroom Risotto"];
+    return names.map((name, i) => ({ slug: "demo-" + i, name, image: null, times: { cook: 15 + i * 5 + " min" } }));
+  }
+  function demoPlan() {
+    const d = new Date();
+    const iso = (n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, 12).toISOString().slice(0, 10);
+    const r = demoRecipes();
+    return [{ date: iso(0), meal: "dinner", recipe: r[0] }, { date: iso(2), meal: "dinner", recipe: r[3] }];
+  }
+
   // ------------------------------------------------------------------------------------- demo --
   function demoOverview() {
     const now = Date.now();
@@ -847,6 +1243,8 @@
     state.focus = dev;
     state.satellite[dev] = "idle";
     setMode("idle");
+    if (params.get("demo") === "cook") return demoCook("card");
+    if (params.get("demo") === "recipes") return openPicker("", demoRecipes(), demoPlan());
     if (params.get("demo") !== "idle") next();
   }
   // ------------------------------------------------------------------------------------ start --

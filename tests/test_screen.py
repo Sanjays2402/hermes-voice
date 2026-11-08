@@ -63,7 +63,7 @@ async def test_stream_turn_reaches_screen(
         CHAT,
         text=stream(
             tool("c1", "running"),
-            tool("c1", "completed"),
+            tool("c1", "completed", label="web_search"),  # Hermes' end event: the tool's name as label
             chunk("**Sunny**, "),
             chunk("see example.com."),
             chunk(finish="stop"),
@@ -86,6 +86,7 @@ async def test_stream_turn_reaches_screen(
     assert [e["type"] for e in events] == ["heard", "tool_start", "tool_end", "delta", "delta", "reply_done"]
     assert events[0]["text"] == "Weather?"
     assert events[1]["tool"] == "web_search" and events[1]["label"] == "weather Dallas"
+    assert events[2]["label"] == "weather Dallas"  # the friendly label is kept when the tool ends
     # The screen gets the reply as Hermes wrote it (markdown, links), not the cleaned spoken text.
     assert events[5]["text"] == "**Sunny**, see example.com."
     assert all(e["device_id"] == device_id for e in events)

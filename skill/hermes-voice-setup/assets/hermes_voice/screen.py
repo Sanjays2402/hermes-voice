@@ -8,6 +8,8 @@ Home Assistant token (any user, not admin) and never the Hermes API key:
 - ``hermes_voice/screen/overview``: Hermes' scheduled jobs, recent sessions and gateway status.
 - ``hermes_voice/screen/retry``: tap to correct. Stops the turn on an Echo and listens again, without the
   wake word; Hermes is told what it misheard.
+- ``hermes_voice/screen/cook``, ``hermes_voice/screen/recipes``, ``hermes_voice/screen/start_timer``: recipes
+  from Mealie (recipes.py): open one, move through its steps, tick off ingredients, browse, start a step's timer.
 """
 
 from __future__ import annotations
@@ -31,10 +33,16 @@ from homeassistant.components.intent.const import TIMER_DATA
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers import entity_registry as er, intent
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
+from . import recipes, video
 from .client import HermesError
 from .const import (
     ACTIVITY_OFF,
@@ -58,6 +66,8 @@ RETRY_PROMPT = (
     'The user tapped "misheard" on the screen: speech-to-text got their last request wrong ("{heard}"). '
     "What they say next is what they meant; ignore the misheard request."
 )
+VIDEO_CHECK = 30.0  # seconds between checks for video modes that have gone idle
+RECIPE_SETTLE = 0.8  # seconds to wait for more recipe lookups in a turn before showing what Hermes opened
 # The page's files, hashed once at start: a screen that reconnects after an update reloads itself.
 PAGE_FILES = (
     "index.html",
@@ -126,6 +136,12 @@ class ScreenHub:
         self.sessions: dict[str | None, str] = {}  # device -> Hermes session of its latest turn
         self._retry: dict[str | None, tuple[str, float]] = {}  # device -> (session to continue, when tapped)
         self._overview: dict[str, tuple[float, dict[str, Any]]] = {}
+        self.cooking: dict[str | None, recipes.Cooking] = {}  # device -> the recipe open on its screen
+        self._recipe_refs: dict[str | None, list[str]] = {}  # device -> recipes Hermes read this turn
+        self._recipe_timer: dict[str | None, Callable[[], None]] = {}
+        self.video: dict[str | None, video.VideoMode] = {}  # device -> video mode, while it is on
+        self._looked: set[str | None] = set()  # devices whose current turn used the camera
+        self._video_check: Callable[[], None] | None = None
         self.page_version = ""
         self.page_html = ""
 
@@ -158,6 +174,10 @@ class ScreenHub:
     @callback
     def turn_start(self, device_id: str | None, heard: str) -> None:
         self.turns[device_id] = Turn(heard=heard, phase="thinking", at=time.time())
+        self._recipe_refs[device_id] = []
+        self._looked.discard(device_id)
+        if (v := self.video.get(device_id)) is not None:
+            v.last = time.monotonic()
         self.publish(device_id, {"type": "heard", "text": heard, "by": "hermes"})
 
     @callback
@@ -171,6 +191,8 @@ class ScreenHub:
     @callback
     def tool(self, device_id: str | None, tool_call_id: str, tool: str, label: str, running: bool) -> None:
         turn = self.turns.setdefault(device_id, Turn(at=time.time()))
+        if not running and (started := turn.tools.get(tool_call_id)):
+            label = started["label"]  # Hermes' end event carries the tool's name, not the friendly label
         turn.tools[tool_call_id] = {"id": tool_call_id, "tool": tool, "label": label, "running": running}
         self.publish(
             device_id,
@@ -181,12 +203,19 @@ class ScreenHub:
                 "label": label,
             },
         )
+        if running:
+            self._recipe_tool(device_id, tool, label)
+            if video.is_look(tool):
+                self._looked.add(device_id)
+                self.video_on(device_id, "look")
 
     @callback
     def reply_done(self, device_id: str | None, text: str) -> None:
         turn = self.turns.setdefault(device_id, Turn(at=time.time()))
         turn.reply, turn.phase = text[:MAX_TEXT], "done"
         self.publish(device_id, {"type": "reply_done", "text": turn.reply})
+        if (v := self.video.get(device_id)) is not None and v.turn_done(device_id in self._looked):
+            self.publish(device_id, {"type": "video", "on": True, "ask": True})
 
     @callback
     def cancelled(self, device_id: str | None) -> str:
@@ -209,6 +238,177 @@ class ScreenHub:
         turn = self.turns.setdefault(device_id, Turn(at=time.time()))
         turn.phase = "error"
         self.publish(device_id, {"type": "error", "message": message})
+
+    # Recipes (recipes.py): what Hermes reads shows on the screen; cooking commands are answered here.
+
+    @callback
+    def _recipe_tool(self, device_id: str | None, tool: str, label: str) -> None:
+        """Hermes used the Mealie MCP server (extras/mealie): show the recipe it read, or what it found.
+
+        The label is the tool's main argument (Hermes' preview of it). Several recipes read in one turn
+        ("which of these is quickest?") show as a list instead of one after the other.
+        """
+        name = tool.rsplit("__", 1)[-1]
+        label = label.strip()
+        if "mealie" not in tool.lower() or not label or recipes.mealie_entry(self.hass) is None:
+            return
+        if name == "search_recipes":
+            self.hass.async_create_task(self.async_show_search(device_id, label))
+        elif name == "get_recipe":
+            refs = self._recipe_refs.setdefault(device_id, [])
+            if label not in refs:
+                refs.append(label)
+            if cancel := self._recipe_timer.pop(device_id, None):
+                cancel()
+
+            async def show(_now: Any) -> None:
+                self._recipe_timer.pop(device_id, None)
+                await self._async_show_refs(device_id)
+
+            self._recipe_timer[device_id] = async_call_later(self.hass, RECIPE_SETTLE, show)
+
+    async def _async_show_refs(self, device_id: str | None) -> None:
+        refs = list(self._recipe_refs.get(device_id) or [])
+        if len(refs) == 1:
+            await self.async_open_recipe(device_id, refs[0])
+            return
+        found = await asyncio.gather(
+            *(recipes.async_search(self.hass, r, 1) for r in refs), return_exceptions=True
+        )
+        items = [hits[0] for hits in found if isinstance(hits, list) and hits]
+        if items:
+            self.publish(device_id, {"type": "recipes", "title": "Recipes Hermes looked at", "items": items})
+
+    async def async_show_search(self, device_id: str | None, query: str) -> None:
+        try:
+            items = await recipes.async_search(self.hass, query, 12)
+        except recipes.RecipeError as err:
+            LOGGER.debug("Recipe search for the screen failed: %s", err)
+            return
+        self.publish(device_id, {"type": "recipes", "title": query, "items": items})
+
+    async def async_open_recipe(self, device_id: str | None, ref: str, view: str = "card") -> dict[str, Any]:
+        """Open a recipe on a device's screen. The same recipe again keeps its place (Hermes re-reading it)."""
+        try:
+            recipe = await recipes.async_get_recipe(self.hass, ref)
+        except recipes.RecipeError as err:
+            LOGGER.debug("Recipe %r for the screen: %s", ref, err)
+            raise
+        cook = self.get_cook(device_id)
+        if cook is None or cook.recipe.get("slug") != recipe.get("slug"):
+            cook = self.cooking[device_id] = recipes.Cooking(recipe=recipe, view=view)
+        else:
+            cook.recipe = recipe
+        self.publish_cook(device_id)
+        return cook.as_dict()
+
+    @callback
+    def get_cook(self, device_id: str | None) -> recipes.Cooking | None:
+        cook = self.cooking.get(device_id)
+        if cook is not None and cook.stale:
+            del self.cooking[device_id]
+            return None
+        return cook
+
+    @callback
+    def publish_cook(self, device_id: str | None) -> None:
+        cook = self.get_cook(device_id)
+        self.publish(device_id, {"type": "cook", "cook": cook.as_dict() if cook else None})
+
+    @callback
+    def close_cook(self, device_id: str | None) -> None:
+        self.cooking.pop(device_id, None)
+        self.publish_cook(device_id)
+
+    @callback
+    def cook_command(self, device_id: str | None, text: str) -> str | None:
+        """Answer "next step", "back", "step 4", "ingredients", "close the recipe" while a recipe is open on
+        this device. None: not a cooking command (or nothing open), so the turn goes to Hermes."""
+        cook = self.get_cook(device_id)
+        parsed = recipes.parse_command(text) if cook else None
+        if cook is None or parsed is None:
+            return None
+        said, closed = recipes.apply_command(cook, *parsed)
+        if closed:
+            self.cooking.pop(device_id, None)
+        self.publish_cook(device_id)
+        self.turns[device_id] = Turn(
+            heard=text, reply=said, phase="done", by="home_assistant", at=time.time()
+        )
+        self.publish(
+            device_id, {"type": "local_answer", "heard": text, "text": said[:MAX_TEXT], "cook": True}
+        )
+        return said
+
+    @callback
+    def cook_context(self, device_id: str | None) -> str | None:
+        cook = self.get_cook(device_id)
+        return cook.context() if cook else None
+
+    # Video mode (video.py): the user's live picture on the screen while they talk to Hermes.
+
+    @callback
+    def video_on(self, device_id: str | None, why: str) -> None:
+        v = self.video.get(device_id)
+        if v is None:
+            self.video[device_id] = video.VideoMode()
+            self.publish(device_id, {"type": "video", "on": True, "why": why})
+            if self._video_check is None:
+                self._video_check = async_call_later(self.hass, VIDEO_CHECK, self._video_tick)
+        else:
+            v.keep()
+
+    @callback
+    def video_off(self, device_id: str | None, why: str) -> bool:
+        if self.video.pop(device_id, None) is None:
+            return False
+        if not self.video and self._video_check is not None:
+            self._video_check()  # nothing left to time out
+            self._video_check = None
+        self.publish(device_id, {"type": "video", "on": False, "why": why})
+        return True
+
+    @callback
+    def video_keep(self, device_id: str | None) -> bool:
+        if (v := self.video.get(device_id)) is None:
+            return False
+        v.keep()
+        self.publish(device_id, {"type": "video", "on": True, "why": "keep"})
+        return True
+
+    @callback
+    def _video_tick(self, _now: Any = None) -> None:
+        self._video_check = None
+        for device_id, v in list(self.video.items()):
+            if v.idle:
+                self.video_off(device_id, "timeout")
+        if self.video:
+            self._video_check = async_call_later(self.hass, VIDEO_CHECK, self._video_tick)
+
+    @callback
+    def video_command(self, device_id: str | None, text: str) -> str | None:
+        """Answer "video mode", "stop video", "keep the camera on" at once. None: not a video command."""
+        action = video.parse_command(text)
+        if action is None:
+            return None
+        if action == "on":
+            self.video_on(device_id, "voice")
+            said = video.SAY["on"]
+        elif action == "off":
+            said = video.SAY["off"] if self.video_off(device_id, "voice") else video.SAY["already_off"]
+        elif self.video_keep(device_id):
+            said = video.SAY["keep"]
+        else:
+            return None  # "keep it on" with no video: something else, for Hermes
+        self.turns[device_id] = Turn(
+            heard=text, reply=said, phase="done", by="home_assistant", at=time.time()
+        )
+        self.publish(device_id, {"type": "local_answer", "heard": text, "text": said})
+        return said
+
+    @callback
+    def video_context(self, device_id: str | None) -> str | None:
+        return video.CONTEXT if device_id in self.video else None
 
     # Turns Home Assistant answered itself (Prefer handling commands locally).
 
@@ -391,8 +591,13 @@ async def async_setup_screen(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_overview)
     websocket_api.async_register_command(hass, ws_stop_timer)
     websocket_api.async_register_command(hass, ws_retry)
+    websocket_api.async_register_command(hass, ws_cook)
+    websocket_api.async_register_command(hass, ws_recipes)
+    websocket_api.async_register_command(hass, ws_start_timer)
+    websocket_api.async_register_command(hass, ws_video)
     if SCREEN_DIR.is_dir() and getattr(hass, "http", None) is not None:
         hass.http.register_view(ScreenPageView())
+        hass.http.register_view(recipes.RecipeImageView())
         await hass.http.async_register_static_paths([StaticPathConfig(SCREEN_URL, str(SCREEN_DIR), False)])
 
 
@@ -565,6 +770,12 @@ def ws_subscribe(
             "device_id": device_id,
             "page": hub.page_version,
             "devices": {d: device_status(hass, c, d) for d, c in controls.items()},
+            "cook": {
+                d: c.as_dict()
+                for d in list(hub.cooking)
+                if (device_id is None or d == device_id) and (c := hub.get_cook(d)) is not None
+            },
+            "video": {d: v.as_dict() for d, v in hub.video.items() if device_id is None or d == device_id},
         }
     )
     poll_timers()
@@ -630,3 +841,138 @@ async def ws_overview(
         connection.send_error(msg["id"], "not_ready", "Hermes Voice is not set up")
         return
     connection.send_result(msg["id"], await hub.async_overview(msg.get("entry_id")))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hermes_voice/screen/cook",
+        vol.Required("device_id"): vol.Any(str, None),
+        vol.Required("action"): vol.In(("open", "view", "step", "check", "close")),
+        vol.Optional("recipe"): str,
+        vol.Optional("view"): vol.In(("card", "ingredients", "steps")),
+        vol.Optional("step"): vol.All(int, vol.Range(min=0)),
+        vol.Optional("index"): vol.All(int, vol.Range(min=0)),
+        vol.Optional("checked"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_cook(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The screen opens a recipe, switches between card, ingredients and steps, ticks off an ingredient, closes."""
+    hub = async_get_hub(hass)
+    if hub is None:
+        connection.send_error(msg["id"], "not_ready", "Hermes Voice is not set up")
+        return
+    device_id, action = msg["device_id"], msg["action"]
+    if action == "open":
+        try:
+            result = await hub.async_open_recipe(device_id, msg.get("recipe", ""), msg.get("view", "card"))
+        except recipes.RecipeError as err:
+            connection.send_error(msg["id"], "not_found", str(err))
+            return
+        connection.send_result(msg["id"], result)
+        return
+    if action == "close":
+        hub.close_cook(device_id)
+        connection.send_result(msg["id"])
+        return
+    cook = hub.get_cook(device_id)
+    if cook is None:
+        connection.send_error(msg["id"], "not_open", "No recipe is open on this device")
+        return
+    cook.at = time.monotonic()
+    if action == "view":
+        cook.view = msg.get("view", cook.view)
+        if "step" in msg:
+            cook.step = msg["step"]
+    elif action == "step":
+        cook.view = "steps"
+        cook.step = msg.get("step", cook.step)
+    elif action == "check" and "index" in msg:
+        (cook.checked.add if msg.get("checked", True) else cook.checked.discard)(msg["index"])
+    cook.step = max(0, min(cook.step, len(cook.recipe.get("steps") or [1]) - 1))
+    hub.publish_cook(device_id)
+    connection.send_result(msg["id"], cook.as_dict())
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "hermes_voice/screen/recipes", vol.Optional("query"): str}
+)
+@websocket_api.async_response
+async def ws_recipes(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """For browsing on the screen: this week's meal plan and the newest recipes (or the ones matching words)."""
+    if recipes.mealie_entry(hass) is None:
+        connection.send_result(msg["id"], {"available": False, "plan": [], "items": []})
+        return
+    query = msg.get("query", "")
+
+    async def safely(coro: Any) -> list[dict[str, Any]]:
+        try:
+            return list(await coro)
+        except recipes.RecipeError:
+            return []
+
+    plan_task = safely(recipes.async_meal_plan(hass, dt_util.now().date())) if not query else None
+    items = await safely(recipes.async_search(hass, query, 24))
+    plan = await plan_task if plan_task else []
+    connection.send_result(msg["id"], {"available": True, "plan": plan, "items": items})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hermes_voice/screen/start_timer",
+        vol.Required("device_id"): str,
+        vol.Required("seconds"): vol.All(int, vol.Range(min=1, max=24 * 3600)),
+        vol.Optional("name"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_start_timer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """A step's timer button: a voice timer on the device, as if "set a timer for 7 minutes" was said to it."""
+    slots: dict[str, Any] = {"seconds": {"value": msg["seconds"]}}
+    if msg.get("name"):
+        slots["name"] = {"value": msg["name"][:40]}
+    try:
+        await intent.async_handle(
+            hass,
+            DOMAIN,
+            intent.INTENT_START_TIMER,
+            slots,
+            device_id=msg["device_id"],
+            language=hass.config.language,
+        )
+    except intent.IntentError as err:
+        connection.send_error(msg["id"], "failed", str(err) or "This device cannot run timers")
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hermes_voice/screen/video",
+        vol.Required("device_id"): str,
+        vol.Required("action"): vol.In(["on", "off", "keep"]),
+        vol.Optional("why"): str,
+    }
+)
+@callback
+def ws_video(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The screen's buttons ("turn the camera off", "keep it on"), and the Echo ending video by itself
+    (shutter closed, camera cut off, no keep-alive): why says which."""
+    hub = async_get_hub(hass)
+    if hub is None:
+        connection.send_error(msg["id"], "not_ready", "Hermes Voice is not set up")
+        return
+    device_id, action = msg["device_id"], msg["action"]
+    if action == "on":
+        hub.video_on(device_id, msg.get("why", "screen"))
+    elif action == "off":
+        hub.video_off(device_id, msg.get("why", "screen"))
+    else:
+        hub.video_keep(device_id)
+    connection.send_result(msg["id"], {"on": device_id in hub.video})

@@ -121,6 +121,16 @@ class HermesConversationEntity(conversation.ConversationEntity):
         chat_log: conversation.ChatLog,
     ) -> conversation.ConversationResult:
         """Send the new user message to Hermes and return its reply."""
+        hub = async_get_hub(self.hass)
+        if hub and (
+            said := hub.video_command(user_input.device_id, user_input.text)
+            or hub.cook_command(user_input.device_id, user_input.text)
+        ):
+            # "video mode", "stop video"; "next step", "back", "step 4"... while a recipe is open on this
+            # device: answered at once.
+            if self._opt(CONF_VOICE_CLEANUP):
+                said = clean_for_voice(said, bool(self._opt(CONF_AVOID_NAME))) or said
+            return await self._say_now(user_input, chat_log, said)
         data = self.entry.runtime_data
         user_id = user_input.context.user_id
         session_id = await data.sessions.async_resolve(
@@ -130,7 +140,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
             user_id=user_id,
             idle_reset_minutes=float(self._opt(CONF_IDLE_RESET_MINUTES)),
         )
-        if hub := async_get_hub(self.hass):
+        if hub:
             # After tap to correct, Home Assistant starts a new conversation: keep Hermes' thread.
             session_id = hub.take_retry(user_input.device_id) or session_id
             hub.sessions[user_input.device_id] = session_id
@@ -139,6 +149,10 @@ class HermesConversationEntity(conversation.ConversationEntity):
             system_parts.append(time_context(dt_util.now()))
         if user_input.extra_system_prompt:
             system_parts.append(user_input.extra_system_prompt)
+        if hub and (cooking := hub.cook_context(user_input.device_id)):
+            system_parts.append(cooking)
+        if hub and (watching := hub.video_context(user_input.device_id)):
+            system_parts.append(watching)
         system_prompt = "\n".join(p for p in system_parts if p.strip()) or None
 
         request = {
@@ -174,6 +188,24 @@ class HermesConversationEntity(conversation.ConversationEntity):
         chat_log.async_add_assistant_content_without_tools(
             conversation.AssistantContent(agent_id=user_input.agent_id, content=text)
         )
+        return conversation.async_get_result_from_chat_log(user_input, chat_log)
+
+    async def _say_now(
+        self, user_input: conversation.ConversationInput, chat_log: conversation.ChatLog, text: str
+    ) -> conversation.ConversationResult:
+        """Answer without Hermes, the same way a Hermes reply is given (streamed when streaming is on)."""
+        if self._opt(CONF_STREAM):
+
+            async def deltas() -> AsyncIterator[conversation.AssistantContentDeltaDict]:
+                yield {"role": "assistant"}
+                yield {"content": text}
+
+            async for _content in chat_log.async_add_delta_content_stream(user_input.agent_id, deltas()):
+                pass
+        else:
+            chat_log.async_add_assistant_content_without_tools(
+                conversation.AssistantContent(agent_id=user_input.agent_id, content=text)
+            )
         return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
     def _log_failure(self, err: HermesError, session_id: str) -> None:

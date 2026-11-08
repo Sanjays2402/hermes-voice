@@ -42,6 +42,7 @@
     <button class="back" id="ov-back" aria-label="Back">‹</button>
     <h1>Hermes Voice</h1>
     <span class="ov-profile" id="ov-profile"></span>
+    <button class="ov-recipes" id="ov-recipes">Recipes</button>
     <label class="ov-bright" id="ov-bright">
       <span aria-hidden="true">☀</span>
       <input type="range" id="brightness" min="0" max="100" step="5" aria-label="Screen brightness">
@@ -63,6 +64,58 @@
     </section>
   </div>
 </section>
+
+<section id="cook" class="screen cook" hidden>
+  <header class="ck-head">
+    <button class="back" id="ck-close" aria-label="Close recipe">×</button>
+    <div class="ck-title" id="ck-title"></div>
+    <div class="ck-timers" id="ck-timers"></div>
+    <nav class="ck-tabs" id="ck-tabs">
+      <button data-view="card">Recipe</button>
+      <button data-view="ingredients">Ingredients</button>
+      <button data-view="steps">Steps</button>
+    </nav>
+  </header>
+  <div class="ck-voice" id="ck-voice"><span class="dot"></span><span class="ck-voice-text" id="ck-voice-text"></span></div>
+  <div class="ck-view ck-card" id="ck-card">
+    <div class="ck-photo" id="ck-photo" role="img" aria-label="Recipe photo"></div>
+    <div class="ck-info">
+      <p class="ck-desc" id="ck-desc"></p>
+      <div class="ck-chips" id="ck-chips"></div>
+      <div class="ck-actions">
+        <button class="ck-go" id="ck-start">Start cooking</button>
+        <button class="ck-alt" id="ck-show-ing">Ingredients</button>
+      </div>
+      <div class="ck-hint">Say “start cooking”, then “next step”</div>
+    </div>
+  </div>
+  <div class="ck-view ck-ingredients" id="ck-ingredients"></div>
+  <div class="ck-view ck-steps" id="ck-steps">
+    <div class="ck-progress"><i id="ck-bar"></i></div>
+    <div class="ck-step-head"><b id="ck-step-no"></b><span id="ck-section"></span></div>
+    <div class="ck-step-text" id="ck-step-text"></div>
+    <div class="ck-step-foot">
+      <button class="ck-nav" id="ck-prev">‹ Back</button>
+      <button class="ck-timer-btn" id="ck-timer-btn" hidden></button>
+      <button class="ck-nav ck-next" id="ck-next">Next ›</button>
+    </div>
+  </div>
+</section>
+
+<section id="picker" class="screen picker" hidden>
+  <header class="ck-head">
+    <button class="back" id="pk-back" aria-label="Back">‹</button>
+    <div class="ck-title" id="pk-title">Recipes</div>
+  </header>
+  <div class="ck-voice" id="pk-voice"><span class="dot"></span><span class="ck-voice-text" id="pk-voice-text"></span></div>
+  <div class="pk-scroll" id="pk-scroll"></div>
+</section>
+
+<div class="video-ask" id="video-ask" hidden>
+  <span>Done with the camera?</span>
+  <button class="va-off" id="va-off">Turn it off</button>
+  <button class="va-keep" id="va-keep">Keep it on</button>
+</div>
 
 <div class="ringing" id="ringing" hidden>
   <div class="r-title">Timer done</div>

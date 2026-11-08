@@ -365,6 +365,39 @@ body[data-mode="idle"] .corner-clock, body[data-mode="offline"] .corner-clock { 
 body[data-muted="1"] .dot { background: var(--error); box-shadow: 0 0 12px var(--error); }
 .act.timer { color: var(--listening); }
 .context .work .countdown { font-variant-numeric: tabular-nums; }
+/* Video mode: the live picture is an Echo window in the bottom-right corner (Hermes Eye). The avatar moves up
+   to clear it; after a few turns without the camera, a card asks whether the user is done. */
+body[data-video="1"][data-mode="answering"] .avatar-wrap,
+body[data-video="1"][data-mode="done"] .avatar-wrap { transform: translate(69px, 10px) scale(0.77); }
+.video-ask {
+  position: fixed;
+  z-index: 8;
+  left: var(--side);
+  bottom: calc(var(--safe-bottom) + 4px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 22px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 20px;
+  animation: rise 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.video-ask[hidden] { display: none; }
+.video-ask button {
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 0;
+  font: inherit;
+  font-weight: 500;
+}
+.video-ask .va-off { background: var(--ink); color: var(--bg); }
+.video-ask .va-keep { background: transparent; color: var(--ink-2); border: 1px solid var(--line); }
+@keyframes rise { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+
 .ringing {
   position: fixed;
   inset: 0;
@@ -435,3 +468,174 @@ body[data-muted="1"] .dot { background: var(--error); box-shadow: 0 0 12px var(-
 .setup h1 { font-weight: 400; margin: 0 0 18px; }
 .setup p { font-size: 20px; line-height: 1.5; color: var(--ink-2); max-width: 760px; }
 .setup code { color: var(--ink); }
+
+/* Recipes (Mealie) ---------------------------------------------------------------------------
+   Read from the counter, touched with wet fingers: big text, big targets (at least 56 px), one thing at a time. */
+.overview { z-index: 4; }
+.cook, .picker { z-index: 5; background: var(--bg); display: flex; flex-direction: column; gap: 12px; --accent: var(--answering); }
+.picker { z-index: 6; }
+.ov-recipes {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--answering) 60%, transparent);
+  background: color-mix(in srgb, var(--answering) 14%, transparent);
+  color: var(--ink);
+  font-size: 18px;
+}
+.ck-head { position: relative; display: flex; align-items: center; gap: 14px; height: 48px; flex: none; }
+.ck-head .back { width: 48px; height: 48px; font-size: 30px; padding: 0 0 3px; flex: none; }
+.ck-title { flex: 1; min-width: 0; font-size: 24px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-timers { display: flex; gap: 8px; flex: none; }
+.ck-timer {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--bg);
+  background: var(--listening);
+}
+.ck-timer.paused { background: var(--line); color: var(--ink-2); }
+.ck-tabs { display: flex; flex: none; padding: 4px; gap: 4px; border-radius: 26px; background: var(--bg-2); border: 1px solid var(--line); }
+.ck-tabs button {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 18px;
+}
+.ck-tabs button.on { background: var(--ink); color: var(--bg); font-weight: 500; }
+
+/* What the Echo hears and says, over the header, while the recipe stays put. */
+.ck-voice {
+  position: absolute;
+  top: var(--safe-top);
+  left: calc(var(--side) + 62px);
+  right: var(--side);
+  height: 48px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--bg-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+  font-size: 20px;
+  color: var(--ink);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 200ms, transform 200ms;
+}
+.ck-voice.on { opacity: 1; transform: none; pointer-events: auto; }
+body[data-mode="listening"] .ck-voice { --accent: var(--listening); }
+body[data-mode="thinking"] .ck-voice { --accent: var(--thinking); }
+body[data-mode="error"] .ck-voice { --accent: var(--error); }
+.ck-voice .dot { flex: none; background: var(--accent); }
+.ck-voice-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ck-view { flex: 1; min-height: 0; }
+.ck-empty { font-size: 22px; color: var(--ink-2); }
+
+/* Card: photo left, what you need to decide right. */
+.ck-card { display: grid; grid-template-columns: 380px 1fr; gap: 24px; }
+.ck-photo {
+  border-radius: 18px;
+  background: var(--bg-2) center / cover no-repeat;
+  border: 1px solid var(--line);
+}
+.ck-photo.none, .pk-photo.none {
+  background-image: linear-gradient(150deg, color-mix(in srgb, var(--answering) 30%, var(--bg-2)) 0%, var(--bg-2) 70%);
+}
+.ck-info { display: flex; flex-direction: column; min-width: 0; padding-top: 2px; }
+.ck-desc {
+  margin: 0 0 14px;
+  font-size: 20px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ck-desc:empty { display: none; }
+.ck-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 18px; padding: 6px 12px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink); }
+.chip small { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.chip.plain { background: transparent; border-color: transparent; color: var(--ink-2); padding-left: 2px; }
+.ck-actions { display: flex; gap: 12px; margin-top: auto; }
+.ck-go, .ck-alt, .ck-nav, .ck-timer-btn {
+  height: 64px;
+  border-radius: 32px;
+  font-size: 24px;
+  font-weight: 500;
+  padding: 0 28px;
+  border: none;
+}
+.ck-go, .ck-next { background: var(--answering); color: #1a1206; }
+.ck-alt, .ck-nav { background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); }
+.ck-go { flex: 1; }
+.ck-hint { margin-top: 10px; font-size: 16px; color: var(--ink-3); }
+
+/* Ingredients: two columns of rows to tick off. */
+.ck-ingredients { overflow-y: auto; columns: 2; column-gap: 24px; scrollbar-width: none; }
+.ck-ingredients::-webkit-scrollbar { display: none; }
+.ck-ingredients h3 { margin: 6px 0 6px; font-size: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); break-after: avoid; }
+.ing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 21px;
+  line-height: 1.25;
+  text-align: left;
+  break-inside: avoid;
+}
+.ing i { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--ink-3); }
+.ing.got { color: var(--ink-3); }
+.ing.got span { text-decoration: line-through; }
+.ing.got i { border-color: var(--local); background: var(--local); }
+.ing.got i::after { content: "\2713"; display: block; text-align: center; line-height: 24px; font-size: 18px; font-style: normal; color: var(--bg); }
+
+/* Steps: one at a time, as big as fits. */
+.ck-steps { display: flex; flex-direction: column; gap: 10px; }
+.ck-progress { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; flex: none; }
+.ck-progress i { display: block; height: 100%; background: var(--answering); transform: scaleX(0); transform-origin: left; transition: transform 300ms; }
+.ck-step-head { display: flex; align-items: baseline; gap: 12px; flex: none; min-width: 0; }
+.ck-step-head b { font-size: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--answering); flex: none; }
+.ck-step-head span { font-size: 20px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-step-text { flex: 1; min-height: 0; overflow: hidden; font-size: 40px; line-height: 1.3; color: var(--ink); }
+.ck-step-foot { display: flex; gap: 12px; flex: none; align-items: center; }
+.ck-nav { min-width: 160px; }
+.ck-nav:disabled { opacity: 0.35; }
+.ck-next { margin-left: auto; min-width: 220px; background: var(--answering); color: #1a1206; border: none; }
+.ck-timer-btn { background: color-mix(in srgb, var(--listening) 16%, transparent); color: var(--ink); border: 1px solid color-mix(in srgb, var(--listening) 60%, transparent); font-size: 21px; }
+
+/* Recipe browser: photo cards, four across. */
+.pk-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.pk-scroll::-webkit-scrollbar { display: none; }
+.pk-scroll h3 { margin: 4px 0 10px; font-size: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.pk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.pk-card { display: flex; flex-direction: column; justify-content: flex-start; align-self: start; padding: 0; border: none; background: transparent; color: var(--ink); text-align: left; min-width: 0; }
+.pk-card > * { width: 100%; }
+.pk-card.opening { opacity: 0.5; }
+.pk-photo { height: 124px; border-radius: 14px; background: var(--bg-2) center / cover no-repeat; border: 1px solid var(--line); }
+.pk-name {
+  margin-top: 8px;
+  font-size: 18px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pk-sub { margin-top: 2px; font-size: 15px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

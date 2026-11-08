@@ -17,6 +17,32 @@ so Hermes keeps the thread and ignores the wrong request. Websocket command:
 `hermes_voice/screen/retry` (`device_id`). Needs a satellite that can start conversations (echo-dot-assist's
 can); otherwise the hint is not shown and a tap opens the overview as before.
 
+## Recipes (Mealie)
+
+With [Mealie](https://mealie.io) connected to Hermes ([extras/mealie](../extras/mealie/README.md)) and to Home
+Assistant (its built-in **Mealie** integration), the screen becomes a kitchen screen:
+
+- **Hermes opens what it reads.** When Hermes looks up a recipe (the MCP server's `get_recipe`), the device
+  that asked shows the recipe card: photo, times, servings. A search (`search_recipes`) shows the matches as
+  photo cards; tap one to open it. Several recipes read in one turn show as a list.
+- **Cooking.** *Start cooking* shows one step at a time in large type, with **Back** and **Next** (or a
+  swipe), a progress bar, the step's heading, and a timer button when the step names a time ("7 to 8
+  minutes" → a 7-minute voice timer on the Echo). The **Ingredients** tab is a list to tick off.
+- **By voice, at once.** While a recipe is open on a device, "next step", "back", "repeat that", "step 4",
+  "start cooking", "ingredients" and "close the recipe" said to that device are answered by Home Assistant
+  itself, without Hermes: the screen moves and the step is read out. Anything else goes to Hermes with a
+  note of the recipe and step on the screen, so "how much garlic here?" has an answer.
+- **Browsing.** The overview's **Recipes** button shows this week's meal plan and the newest recipes.
+
+Recipes come through Home Assistant's Mealie integration (`mealie.get_recipe`, `get_recipes`,
+`get_mealplan`), so the Mealie token stays there; photos are passed through Home Assistant
+(`/hermes_voice/recipe_image/<recipe id>`, recipe photos only, no login, like Mealie's own). Headings that
+Paprika and many sites store as steps ("1 Prepare the ingredients:") become the title of the steps after them.
+A recipe card nobody cooks from closes after 10 minutes; a recipe being cooked stays until closed (or 4 hours
+without a command). Websocket commands: `hermes_voice/screen/cook` (`device_id`, `action`: open, view, step,
+check, close), `hermes_voice/screen/recipes` (`query`), `hermes_voice/screen/start_timer` (`device_id`,
+`seconds`, `name`). `?demo=cook` and `?demo=recipes` show both screens without Home Assistant.
+
 ## Timers, mute and Do not disturb
 
 On an Echo with hassmic the screen shows running voice timers counting down (top of the idle lines), fills

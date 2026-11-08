@@ -11,6 +11,38 @@ it your own ([The Hermes screen](#the-hermes-screen-echo-show)).
 keeping Fire OS and the Echo's audio processing. Hermes Voice runs on the Home Assistant and Hermes
 hosts. It connects Assist to a Hermes profile once the Echo has been set up as an Assist satellite.
 
+## Echo compatibility: check before buying
+
+> [!WARNING]
+> **Check the exact model number and installed Fire OS build before buying an Echo for this project.**
+> A used unit can already have an Amazon update that blocks its unlock, even if the model is listed below.
+> Ask the seller for a photo of the model label and the full software version. Treat compatibility as
+> unknown if the seller can't confirm the build. A factory reset leaves the installed firmware in place.
+
+The table lists the firmware builds that echo-dot-assist targets. To check a unit before buying, compare
+its **currently installed build**, and its bootloader where required, with the linked model guide.
+Some guides install the target build after unlocking, so the installed build and the target build can differ.
+Keep a stock unit off Wi-Fi until its model guide calls for a connection.
+
+| Echo | Model number | Target Fire OS build | Model guide |
+|---|---|---|---|
+| Echo Dot 2nd gen (2016) | `RS03QR` | 6574.1 (`NS65741`, build `8146`) | [biscuit](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/biscuit/README.md) |
+| Echo 2nd gen (2017) | `XC56PY` | 6.5.7.2 (`NS6572`, build `6436`) | [radar](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/radar/README.md) |
+| Echo Dot 3rd gen (2018) | `D9N29T` | 6574.1 (`NS65741`, build `8138`) | [donut](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/donut/README.md) |
+| Echo Input (2018) | `C1125P` | 6.5.7.5 (`NS6575`, build `8338`) | [cupcake](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/cupcake/README.md) |
+| Echo Show 5 1st gen (2019) | `H23K37` | 6574.1 (`NS65741`, build `8149`) | [checkers](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/checkers/README.md) |
+| Echo Show 8 1st gen (2019) | `C7H6N3` | 6.5.7.0 (`NS6570`, build `6074`) | [crown](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/crown/README.md) |
+| Echo Show 5 2nd gen (2021) | `C76N8S` | 6574.1 (`NS65741`, build `8149`) | [cronos](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/cronos/README.md) |
+| Echo Show 8 2nd gen (2021) | `A8H3N2` | 7574.1 (`PS75741.7080N`, build `7080`); the guide also covers builds `7077`, `7082` and `7806` | [athena](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/athena/README.md) |
+
+**Echo Show 5 1st gen (`H23K37`):** Fire OS **6575.1 (`NS65751`, build `8848`)** blocks the unlock in
+our guide. Our working setup used build `8149`. See the [Echo Show 5 setup notes](devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb).
+
+**Echo Dot 3rd gen:** Look for `D9N29T`. The 2019 refresh (`C78MP8`) and the version with a clock
+(`36EBT3`) are unsupported. See the [upstream Echo model list](https://github.com/Gamer92000/echo-dot-assist/blob/main/devices/MODELS.md).
+
+## Project components
+
 ```
  Echo (echo-dot-assist)          Home Assistant                        Hermes Agent
  ┌──────────────┐  audio  ┌──────────────────────────────┐  HTTPS/HTTP  ┌─────────────────────┐
@@ -27,6 +59,7 @@ This repo adds only the missing pieces:
 |---|---|
 | `custom_components/hermes_voice` | Home Assistant conversation agent that sends each turn to a Hermes profile with a stable `X-Hermes-Session-Id`, so Hermes keeps the conversation. Streams the reply so speech starts early, cleans it for speech, and speaks a short fallback instead of error text. |
 | `custom_components/hermes_voice/screen`, `devices/echo/screen-app` | The Hermes screen: a page Home Assistant serves with the conversation as it happens, and a small Android app that shows it full screen on an Echo Show. |
+| `devices/echo/eye-app`, `extras/eye` | Hermes Eye: a small app that lets Hermes use the Echo Show's camera (snapshots, video mode, a REC badge), and the `look` tool for the voice profile. The setup skill builds it on your computer with your own key. |
 | `skill/hermes-voice-setup` | A Hermes skill: your own agent prepares a voice profile, installs/configures Home Assistant + hermes_voice, and verifies it. |
 | `docs/changes-and-undo.md` | Everything Hermes Voice changes in Home Assistant, Hermes and on the Echo, and how to undo each. |
 | `docs/voice-profile.md` | How to set up a dedicated voice profile by hand (SOUL.md, tools, thinking effort, separate provider). |
@@ -60,7 +93,21 @@ On an Echo Show the home screen becomes Hermes':
 - **Answering**: the reply appears as it is written, while it is spoken.
 - **Tap to correct**: if it misheard you, tap the screen while it thinks or answers. It stops, says "Go
   ahead.", and listens again without the wake word; Hermes is told what it misheard.
+- **Recipes**: with [Mealie](https://mealie.io) connected ([extras/mealie](extras/mealie/README.md)), recipes
+  Hermes looks up open on the screen, and you cook from it: one big step at a time, "next step" by voice or
+  a swipe, ingredients to tick off, a timer button on steps with a time.
 - **Tap** the idle screen for an overview of scheduled jobs and recent sessions. Timer alarms get a big Stop button.
+- **Camera (optional)**: with [Hermes Eye](docs/eye.md), Hermes can look through the Show's camera ("what am
+  I holding?", "read this"). In **video mode** your live picture sits in a corner of the screen while you
+  talk, like a video call. Say "video mode" to start it, or just ask Hermes to look. It ends when you say
+  "stop video", after five quiet minutes, or when you close the shutter or press mute. After a few
+  questions that don't use the camera, the screen asks if you're done with it.
+
+**The camera and privacy.** A **● REC** badge shows on the screen whenever the camera is on. The camera's
+shutter and the mute button always win: with the shutter closed Hermes is told it sees nothing, and mute
+cuts the camera off in the Echo's kernel, where no app can override it. Pictures go to your voice profile's
+model only when Hermes looks, and nothing is saved. The camera is off unless something asked for it in the
+last 15 seconds, or video mode is on.
 
 **Make it yours.** The screen is one HTML page (`custom_components/hermes_voice/screen/`: `index.html`,
 `style.css`, `app.js`) that gets a live feed of events from Home Assistant over its websocket: listening,
@@ -133,12 +180,15 @@ Requires Home Assistant 2026.10 or newer (the version tested).
 
 ## Devices
 
-| Device | Status |
-|---|---|
-| Echo Dot 2nd gen via [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) | Tested end to end (flashed from Windows, "Hey Hermes" wake word, Home Assistant in Docker on macOS). Device setup is echo-dot-assist's; it can brick the Echo. |
-| Echo Show 5 1st gen (2019) via echo-dot-assist | Tested end to end (flashed from an Ubuntu live USB, "Hey Hermes" wake word, Home Assistant in Docker on macOS). Needs a Linux PC and a 16 GB drive; see [devices/echo/README.md](devices/echo/README.md#echo-show-5-1st-gen-on-an-ubuntu-live-usb). |
-| Echo Dot 3rd gen (2018), Echo 2nd gen, Echo Show 5 2nd gen, Echo Show 8, Echo Input via echo-dot-assist | Supported by echo-dot-assist; not tested by this project. |
-| Other Home Assistant Assist satellites (e.g. Voice PE) | Should work, since the satellite only needs a pipeline whose conversation agent is hermes_voice. Untested. |
+We tested Hermes Voice end to end on the Echo Dot 2nd gen (flashed from Windows) and Echo Show 5 1st gen
+(flashed from an Ubuntu live USB), both with the "Hey Hermes" wake word and Home Assistant in Docker on macOS.
+The remaining Echo models have upstream support and are untested with Hermes Voice. See the
+[model and firmware table](#echo-compatibility-check-before-buying).
+
+Other Home Assistant Assist satellites, such as Voice PE, should work with an Assist pipeline that uses
+Hermes Voice as its conversation agent. These are untested by this project.
+
+Flashing an Echo with echo-dot-assist can brick it. The Echo Show 5 setup uses a Linux PC and a 16 GB work drive.
 
 The tested Echo Dot 2 required a hardware short after the unlock stalled. The device guide records
 the Windows driver issue, recovery point, firmware mismatch and subsequent slot inspection.
