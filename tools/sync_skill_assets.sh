@@ -14,4 +14,5 @@ rsync -a --exclude build --exclude .gitignore "$ROOT/devices/echo/eye-app/" "$AS
 cp "$ROOT/extras/eye/eye_mcp.py" "$ASSETS/eye/"
 rsync -a --exclude __pycache__ "$ROOT/extras/visual-memory/vismem" "$ASSETS/visual-memory/"
 cp "$ROOT/extras/visual-memory/"{pyproject.toml,config.example.toml,README.md} "$ASSETS/visual-memory/"
+rsync -a "$ROOT/extras/visual-memory/docs" "$ASSETS/visual-memory/"
 echo "synced $ASSETS"

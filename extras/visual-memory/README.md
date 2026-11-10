@@ -4,6 +4,10 @@ Hermes remembers what the Echo Show's camera saw and can answer **"What changed?
 see my red screwdriver?"** or **"What was on the desk earlier?"**, and show the before/after pictures on the
 Echo's screen.
 
+![The Echo's screen showing the desk and three detected objects](docs/watching.jpg)
+
+![The Echo's before-and-after comparison after the yellow mug was removed](docs/comparison.jpg)
+
 The point isn't spotting which of three things you took away. It's an agent that keeps track of a workspace
 over days: where something was last seen, what was on the bench when you stopped, whether anything moved
 while you were out. The camera is a used Echo Show (about $20) running Hermes Eye, and the looking can be
