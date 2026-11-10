@@ -1,16 +1,17 @@
 [project]
 name = "hermes-visual-memory"
-version = "0.1.0"
+version = "0.3.0"
 description = "Visual memory for Hermes: remembers what the Echo Show's camera saw, and what changed."
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-  "numpy>=1.26",
-  "opencv-python-headless>=4.9",
-  "mcp>=1.2,<2",
+  "numpy>=1.26,<3",
+  "opencv-python-headless>=4.9,<5",
 ]
 
 [project.optional-dependencies]
+# The standalone MCP server (vismem.mcp_server). The Hermes plugin registers its tools natively instead.
+mcp = ["mcp>=1.2,<2"]
 test = ["pytest>=8"]
 
 [project.scripts]
@@ -22,3 +23,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["vismem"]
+
+[tool.pytest.ini_options]
+# This folder is also a Hermes plugin (its __init__.py), so tests import by path, with vismem on the path.
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
+testpaths = ["tests"]

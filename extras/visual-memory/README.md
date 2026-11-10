@@ -4,7 +4,13 @@ Hermes remembers what the Echo Show's camera saw and can answer **"What changed?
 see my red screwdriver?"** or **"What was on the desk earlier?"**, and show the before/after pictures on the
 Echo's screen.
 
-It runs on the same computer as Hermes. It takes one picture a second from Hermes Eye (the Show's camera
+The point isn't spotting which of three things you took away. It's an agent that keeps track of a workspace
+over days: where something was last seen, what was on the bench when you stopped, whether anything moved
+while you were out. The camera is a used Echo Show (about $20) running Hermes Eye, and the looking can be
+done by a vision model on your own computer.
+
+It installs as a **Hermes plugin** (below), or runs as a standalone service with an MCP server. It runs on
+the same computer as Hermes. It takes one picture a second from Hermes Eye (the Show's camera
 app, [docs/eye.md](../../docs/eye.md)) and decides locally when the desk has really changed. A vision model
 looks only when it's turned on, when the camera is uncovered, and when someone asks. Memory is a SQLite file
 and a folder of snapshots.
@@ -12,6 +18,51 @@ and a folder of snapshots.
 The demo: three things on the desk. "Hey Hermes, turn on visual memory" ("OK, I'm watching your desk"; the
 Echo shows the desk outlined and the things on it boxed). "What's in front of you?" Cover the camera, take
 one thing away, uncover. "What did I take away?" ("The keys are gone", with before/after on the screen.)
+
+## Install as a Hermes plugin
+
+You need:
+
+- **A camera:** an Echo Show 5 running Hermes Eye, the camera app from this repository
+  ([docs/eye.md](../../docs/eye.md); the `hermes-voice-setup` skill builds and installs it). It serves a
+  snapshot on your network and shows a red REC badge while the camera is in use. Note its address and token.
+- **A vision model**, either of:
+  - the one Hermes already uses for pictures (the default, `vision = "hermes"`). The plugin registers its own
+    model slot, *Visual memory*, which follows your vision model until you pick another for it in
+    `hermes model` → *Configure auxiliary models*. Hermes holds the credentials; the plugin never sees a key.
+  - a model on your own computer through any OpenAI-compatible server (`vision = "local"`): Ollama, LM Studio,
+    llama.cpp or vLLM. Tested with `qwen3.6:35b-a3b` in Ollama (about 5 s a look on a Mac Studio M1 Max).
+- The Echo's screen (optional): the Hermes screen page from the `hermes_voice` Home Assistant integration
+  shows the before/after pictures and a "Visual memory on" chip.
+
+```bash
+hermes plugins install hermes-visual-memory        # asks for EYE_TOKEN (the camera's token)
+hermes config set plugins.entries.hermes-visual-memory.settings.eye_url http://<echo-ip>:28940
+# Optional: a local model instead of Hermes's vision model
+hermes config set plugins.entries.hermes-visual-memory.settings.vision local
+hermes config set plugins.entries.hermes-visual-memory.settings.local_model qwen3.6:35b-a3b
+hermes gateway restart
+```
+
+Then say or type "turn on visual memory". Settings are in `plugins.entries.hermes-visual-memory.settings`
+(also on the plugin's page in the Desktop app); every key is listed in [plugin.yaml](plugin.yaml).
+
+**What the plugin does on your computer** (disclosed for the catalog):
+
+- Nothing runs until the first visual memory tool call. That call starts, inside the Hermes process: a camera
+  loop (one snapshot a second from Hermes Eye on your network, **only while visual memory is on**), a small
+  API on 127.0.0.1 that the tools use (token-protected), housekeeping that deletes old pictures, and a
+  display feed on your network (port 28951) that answers only the Echo's own address and this computer, so
+  the Echo's screen can show the pictures. These threads stop when Hermes stops.
+- Network calls: the camera on your network; the vision model, wherever Hermes routes the *Visual memory*
+  task (a cloud provider if that's your vision model), or the local server you set. Nothing else, no
+  telemetry.
+- Data: a SQLite file and the analysed snapshots in Hermes's data directory for the plugin
+  (`<hermes home>/plugin-data/hermes-visual-memory/`). Pictures are deleted after 14 days, observations
+  after 90; "delete all visual memory" deletes everything.
+- Credentials: only `EYE_TOKEN`, read through Hermes. No shell commands; the plugin never runs the Codex CLI
+  (that option exists only for the standalone service).
+- A second Hermes session of the same profile uses the service the first one started.
 
 ## How it decides
 
@@ -76,7 +127,9 @@ video-mode window), so "on the left" matches the screen.
 
 ## The vision model
 
-Either the user's own **Codex CLI** (default), or **a local model** on any OpenAI-compatible server
+As a plugin, **the model Hermes routes the *Visual memory* task to** (default; your vision model unless
+you pin another), or a local model as below. The standalone service uses the user's own **Codex CLI**
+(its default), or **a local model** on any OpenAI-compatible server
 (Ollama, LM Studio, llama.cpp, vLLM): `vision = "local"`, `local_url`, `local_model` (setup:
 `vismem_setup.py --profile voice --local-model <name> [--local-url …]`). With a local model, pictures never
 leave the network. Local models are shown only the current picture (`model_compares = "auto"`): given
@@ -113,15 +166,17 @@ Limits: at most `manual_per_hour` (20) looks an hour, 0 for no limit. (With `aut
 also have a 60 s gap and 10 an hour / 30 a day.) Every call is logged with time, tokens and success
 (`vismem usage`).
 
-## Install
+## Install as a standalone service (MCP)
 
-Needs Python ≥ 3.11, the Codex CLI signed in, and Hermes Eye on the Show.
+The way it ran before the plugin, and still supported: a background service of its own, with the tools over
+MCP. It can also use the Codex CLI for vision. Needs Python ≥ 3.11, Hermes Eye on the Show, and a vision model
+(the Codex CLI signed in, or a local one).
 
 The setup skill does all of this: `skill/hermes-voice-setup/scripts/vismem_setup.py --profile voice` (with `--check`, `--dry-run`, `--uninstall`). By hand:
 
 ```bash
 cd extras/visual-memory
-uv venv -p 3.11 .venv && uv pip install -p .venv/bin/python -e .
+uv venv -p 3.11 .venv && uv pip install -p .venv/bin/python -e '.[mcp]'
 cp config.example.toml ~/.config/hermes-voice/visual-memory.toml   # set eye_url
 .venv/bin/python -m vismem.cli install-service                     # a launchd agent; starts now and at login
 ```
@@ -162,8 +217,9 @@ vismem forget all|images|session | forget older <days>
 vismem install-service | uninstall-service
 ```
 
-## Hermes tools (MCP)
+## Hermes tools
 
+Registered natively by the plugin, or over MCP by the standalone service (`vismem/tools.py` holds both):
 `visual_memory` (on/off/status), `what_changed`, `find_object`, `describe_scene`, `object_history`,
 `show_evidence`, `forget_visual_memory`. Each calls the local API and returns text written to be spoken,
 which keeps the visible / possibly obstructed / gone distinctions.
@@ -182,7 +238,8 @@ Local API (127.0.0.1:28950, `Authorization: Bearer <data_dir/api_token>`): `GET 
 - With Codex, snapshots leave this computer only when analysed: they go to OpenAI through the user's
   Codex CLI. With a local model they never leave the network. The model is told to ignore people. There is no face recognition and no record of who was there.
 - The camera's shutter and the Echo's mute button are respected: both stop the picture at the source.
-- Data lives in `~/.local/share/hermes-visual-memory` (this account only, 0700/0600). The API listens on
+- Data lives in the plugin's data directory, or `~/.local/share/hermes-visual-memory` for the standalone
+  service (this account only, 0700/0600). The API listens on
   127.0.0.1 with a token; the display feed listens on the LAN but only answers the Echo's own address, and
   serves only the picture currently shown, under a random name.
 
@@ -277,11 +334,30 @@ is uncovered.
 
 ## Rollback
 
+Say "delete all visual memory" first if you want the observations and pictures gone.
+
+Plugin: `hermes plugins remove hermes-visual-memory`. Its data directory stays until you delete it
+(`<hermes home>/plugin-data/hermes-visual-memory/`).
+
+Standalone service:
+
 ```bash
-.venv/bin/python -m vismem.cli uninstall-service      # stops it; memory stays
-rm -rf ~/.local/share/hermes-visual-memory            # deletes memory and pictures
+.venv/bin/python -m vismem.cli forget all            # deletes memory and pictures
+.venv/bin/python -m vismem.cli uninstall-service     # stops it
 hermes -p <profile> config set mcp_servers.vismem null   # or restore the profile backup
 ```
+
+## Credits
+
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research: the agent, its plugin system
+  and the model routing the plugin uses.
+- [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) by Gamer92000 (and the unlock work it
+  builds on): the Echo as a Home Assistant voice satellite.
+- [Qwen 3.6](https://github.com/QwenLM) by Alibaba's Qwen team: the local vision model it was tested with.
+- [Ollama](https://github.com/ollama/ollama): runs that model locally.
+- [OpenCV](https://opencv.org) and [NumPy](https://numpy.org): the picture checks done without a model.
+
+The whole project's credits: [CREDITS.md](../../CREDITS.md).
 
 ## Reuse
 

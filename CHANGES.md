@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hermes Visual Memory is now also a native Hermes plugin (`extras/visual-memory`, `plugin.yaml`): the seven
+  tools registered with Hermes, the service started inside Hermes on the first tool call, memory in Hermes's
+  plugin data directory, the camera token read through Hermes. Vision goes through Hermes's own model routing
+  (a "Visual memory" model slot that follows the user's vision model) or a local OpenAI-compatible server; the
+  plugin never runs the Codex CLI. Passes `hermes plugins validate --install-deps` and `hermes plugins doctor`.
+  The standalone service and MCP server work as before; `mcp` is now an optional extra (`.[mcp]`), since Hermes
+  ships its own.
 - Docs: Visual Memory's live test with a local model (qwen3.6 through Ollama): each problem found and its
   fix, what still works poorly (keys and small metal things), and where the time of an answer goes.
 

@@ -154,7 +154,7 @@ def install_app(py: str) -> tuple[str, bool]:
         "install its Python packages: numpy, opencv-python-headless, mcp (downloads about 60 MB)"
     ):
         subprocess.run([venv_py, "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
-        subprocess.run([venv_py, "-m", "pip", "install", "-q", APP_DIR], check=True)
+        subprocess.run([venv_py, "-m", "pip", "install", "-q", APP_DIR + "[mcp]"], check=True)
     return venv_py, not same
 
 

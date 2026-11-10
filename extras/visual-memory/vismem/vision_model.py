@@ -10,8 +10,9 @@ Each call sends the current snapshot (and, to compare, the previous one). Nothin
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import base64
+import contextvars
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
@@ -349,6 +350,55 @@ class LocalVision:
             "output_tokens": int(u.get("completion_tokens") or 0),
         }
         return result
+
+
+class HermesVision:
+    """The model Hermes routes the plugin's own `visual_memory` task to (`ctx.llm`), used when visual memory
+    runs as a Hermes plugin. Hermes picks the provider, holds the credentials and logs each call; the plugin
+    never sees a key. By default the task follows the user's vision model, and `auxiliary.visual_memory`
+    pins another one (a local Ollama model, for example)."""
+
+    TASK = "visual_memory"
+
+    def __init__(self, llm: object, timeout: float = 60.0) -> None:
+        self.llm = llm
+        self.timeout = timeout
+        self.model = "hermes"
+        # Looks run on the camera loop's and the API's threads. Hermes reads the active profile from
+        # context variables, so each call runs in a copy of the context the plugin started in.
+        self._context = contextvars.copy_context()
+
+    def analyze(self, current: bytes, previous: bytes | None, previous_objects: list[dict]) -> Analysis:
+        prompt = build_prompt(previous, previous_objects)
+        prompt += "\nAnswer with only a JSON object: {\"summary\": ..., \"objects\": [...], \"missing\": [...], \"workspace\": ...}."
+        images = ([previous] if previous is not None and previous_objects else []) + [current]
+        blocks = [{"type": "image", "data": img, "mime_type": "image/jpeg"} for img in images]
+        started = time.monotonic()
+        try:
+            result = self._context.copy().run(
+                self.llm.complete_structured,  # type: ignore[attr-defined]
+                instructions=prompt,
+                input=blocks,
+                json_mode=True,
+                schema_name="visual_memory",
+                temperature=0,
+                timeout=self.timeout,
+                task=self.TASK,
+                purpose="visual-memory.look",
+            )
+        except Exception as err:  # provider errors, timeouts, no vision model configured
+            raise VisionError(f"Hermes' vision model failed: {str(err)[:300]}") from err
+        seconds = time.monotonic() - started
+        answer = result.parsed if isinstance(getattr(result, "parsed", None), dict) else _json_in(result.text or "")
+        analysis = parse(answer)
+        usage = getattr(result, "usage", None)
+        analysis.model = f"{getattr(result, 'provider', '') or 'hermes'}/{getattr(result, 'model', '') or '?'}"
+        analysis.seconds = seconds
+        analysis.usage = {
+            "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
+            "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        }
+        return analysis
 
 
 class CodexVision:

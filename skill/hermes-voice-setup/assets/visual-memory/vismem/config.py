@@ -37,12 +37,14 @@ class Config:
     sample_seconds: float = 1.0
     stable_seconds: float = 2.5
 
-    # Which vision model looks at pictures: "codex" (the Codex CLI on the user's ChatGPT plan) or "local"
-    # (any OpenAI-compatible server: Ollama http://127.0.0.1:11434/v1, LM Studio http://127.0.0.1:1234/v1).
+    # Which vision model looks at pictures: "codex" (the Codex CLI on the user's ChatGPT plan), "local"
+    # (any OpenAI-compatible server: Ollama http://127.0.0.1:11434/v1, LM Studio http://127.0.0.1:1234/v1)
+    # or "hermes" (only as a Hermes plugin: the model Hermes routes the plugin's vision task to).
     vision: str = "codex"
     # Whether the model is shown the previous picture and its object list to compare with. Codex compares
     # well; local models tend to copy the earlier list back ("still there" for a thing that was taken), so
-    # by default they describe only the current picture and the matching is done here. "auto" = that.
+    # by default they (and any model Hermes picks) describe only the current picture and the matching is
+    # done here. "auto" = that.
     model_compares: str = "auto"
     local_url: str = "http://127.0.0.1:11434/v1"
     local_model: str = ""
@@ -127,7 +129,7 @@ class Config:
     @property
     def compares(self) -> bool:
         if self.model_compares == "auto":
-            return self.vision != "local"
+            return self.vision == "codex"
         return self.model_compares in ("true", "yes", "1", True)
 
     @property
@@ -160,7 +162,7 @@ def load(path: Path | None = None) -> Config:
         for key, value in data.items():
             setattr(cfg, key, value)
     if cfg.vision not in ("codex", "local"):
-        raise ValueError(f"{path}: vision must be \"codex\" or \"local\"")
+        raise ValueError(f"{path}: vision must be \"codex\" or \"local\" (\"hermes\" is for the plugin)")
     if cfg.vision == "local" and not cfg.local_model:
         raise ValueError(f"{path}: vision = \"local\" needs local_model (e.g. \"qwen2.5vl:7b\")")
     return cfg

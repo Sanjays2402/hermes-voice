@@ -18,6 +18,9 @@ copied into this repository.
 | Wyoming protocol | https://github.com/OHF-Voice/wyoming | How Home Assistant talks to local speech-to-text / text-to-speech / wake word services. |
 | Wyoming Whisper and Piper servers (Rhasspy / Open Home Foundation) | https://hub.docker.com/r/rhasspy/wyoming-whisper · https://hub.docker.com/r/rhasspy/wyoming-piper | The speech-to-text and text-to-speech containers `speech_setup.py` runs (pinned `3.8.1` / `2.5.2`). Used as-is. |
 | Parakeet TDT 0.6B v2 (NVIDIA) via sherpa-onnx (k2-fsa) | https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2 · https://github.com/k2-fsa/sherpa-onnx | The English speech-to-text model the Whisper container picks by default; downloaded by the container, not included here. |
+| Qwen 3.6 (Alibaba Qwen team) | https://github.com/QwenLM | The local vision model Hermes Visual Memory was tested with (`qwen3.6:35b-a3b`); downloaded by Ollama, not included here. |
+| Ollama | https://github.com/ollama/ollama | Runs that vision model locally for Hermes Visual Memory (`vision = "local"`). Used as-is. |
+| OpenCV, NumPy | https://opencv.org · https://numpy.org | The picture checks (quality, steadiness, change) Hermes Visual Memory does without a model. |
 
 Training data used by `wakeword/` (downloaded at run time, never redistributed): MIT environmental impulse
 responses (`davidscripka/MIT_environmental_impulse_responses`), AudioSet (`agkphysics/AudioSet`), Free Music

@@ -87,11 +87,11 @@ def make_vision(cfg: Config, quick: bool) -> Any:
 
 
 class Service:
-    def __init__(self, cfg: Config, vision: Any = None, camera: Any = None) -> None:
+    def __init__(self, cfg: Config, vision: Any = None, camera: Any = None, quick_vision: Any = None) -> None:
         self.cfg = cfg
         self.store = Store(cfg.data_path)
         self.vision = vision or make_vision(cfg, quick=False)
-        quick = None if vision else make_vision(cfg, quick=True)
+        quick = quick_vision if vision else make_vision(cfg, quick=True)
         self.mem = Memory(cfg, self.store, self.vision, quick_vision=quick)
         self._show_next_until = 0.0  # a question is waiting for a look: show its pictures when it is done
         self.mem.listeners.append(self._after_look)
@@ -217,18 +217,29 @@ class Service:
             "input_tokens": sum(r["input_tokens"] or 0 for r in rows),
             "cached_tokens": sum(r["cached_tokens"] or 0 for r in rows),
             "output_tokens": sum(r["output_tokens"] or 0 for r in rows),
-            "cost": "on the user's ChatGPT/Codex plan (counts toward its usage limits; no per-call charge)",
+            "cost": {
+                "codex": "on the user's ChatGPT/Codex plan (counts toward its usage limits; no per-call charge)",
+                "local": "none: a model on this computer or network",
+                "hermes": "whatever the model Hermes routes the visual_memory task to costs",
+            }.get(self.cfg.vision, ""),
             "recent": rows[-10:],
         }
 
     # Servers
 
-    def serve(self) -> None:
+    def start(self) -> None:
+        """Start the API, the display feed, the camera loop and housekeeping in background threads, and
+        return. Raises OSError when a port is taken (another visual memory is running)."""
         api = ThreadingHTTPServer((self.cfg.api_host, self.cfg.api_port), _handler(self, display=False))
-        disp = ThreadingHTTPServer(
-            (self.cfg.display_host, self.cfg.display_port), _handler(self, display=True)
-        )
+        try:
+            disp = ThreadingHTTPServer(
+                (self.cfg.display_host, self.cfg.display_port), _handler(self, display=True)
+            )
+        except OSError:
+            api.server_close()
+            raise
         api.daemon_threads = disp.daemon_threads = True
+        self._servers = (api, disp)
         threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in (api, disp)]
         threads += [
             threading.Thread(target=self.observe, daemon=True, name="vismem-observe"),
@@ -244,15 +255,24 @@ class Service:
             sorted(self.cfg.allowed_display_clients),
         )
 
+    def shutdown(self) -> None:
+        self.stop.set()
+        for s in getattr(self, "_servers", ()):
+            s.shutdown()
+            s.server_close()
+        self.store.close()
+
+    def serve(self) -> None:
+        """Run until SIGTERM/SIGINT (the standalone service)."""
+        self.start()
+
         def _stop(*_: Any) -> None:
             self.stop.set()
 
         signal.signal(signal.SIGTERM, _stop)
         signal.signal(signal.SIGINT, _stop)
         self.stop.wait()
-        api.shutdown()
-        disp.shutdown()
-        self.store.close()
+        self.shutdown()
 
 
 def _handler(svc: Service, display: bool) -> type[BaseHTTPRequestHandler]:
