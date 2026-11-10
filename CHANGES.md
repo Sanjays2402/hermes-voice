@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Docs: Visual Memory's live test with a local model (qwen3.6 through Ollama): each problem found and its
+  fix, what still works poorly (keys and small metal things), and where the time of an answer goes.
+
 ## 0.2.0 — 2026-11-09
 
 - Hermes Visual Memory (`extras/visual-memory`): Hermes remembers what the Echo Show's camera saw and answers
