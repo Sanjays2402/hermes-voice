@@ -11,6 +11,7 @@
  *                         Without one, the login of Home Assistant's own frontend in this browser is used.
  *   ?hold=<seconds>       how long an answer stays up after the Echo goes idle (default 60)
  *   ?avatar=<url>         a picture to use instead of the default avatar
+ *   ?vismem=<url>         Hermes Visual Memory's display feed (default: this page's host, port 28951)
  *   ?eyes=<x>,<y>         where the eyes are in that picture (fractions, e.g. 0.5,0.4): the idle screen zooms there
  *   ?zoom=<n>             how far the idle screen zooms in (default 8)
  *   ?demo                 play a scripted conversation, no Home Assistant needed (?demo=idle: stay idle,
@@ -121,6 +122,16 @@
     shopping_list: "Checking the shopping list",
     add_to_shopping_list: "Adding to the shopping list",
     look: "Looking through the camera",
+    what_changed: "Comparing what the camera saw",
+    find_object: "Checking visual memory",
+    describe_scene: "Checking visual memory",
+    object_history: "Checking visual memory",
+    show_evidence: "Showing the pictures",
+    visual_memory: "Visual memory",
+    forget_visual_memory: "Deleting visual memory",
+    agent_tasks: "Checking the agents' tasks",
+    agent_task: "Reading a task",
+    agent_schedules: "Checking schedules",
   };
 
   function toolText(tool) {
@@ -402,6 +413,54 @@
   setInterval(() => { if (state.video.on) eyeVideo("keep"); }, EYE_KEEP_MS);
   $("va-off").addEventListener("click", () => videoAction("off", "screen"));
   $("va-keep").addEventListener("click", () => videoAction("keep", "screen"));
+
+  // ------------------------------------------------------------------------------- vismem --
+  // Hermes Visual Memory (extras/visual-memory): a chip while it is watching, and the pictures Hermes shows
+  // (before/after, or where something was last seen). The feed runs on the computer that serves this page;
+  // it lets only the Echo's own address in, so other screens simply never connect.
+  const VISMEM = params.get("vismem") || location.protocol + "//" + location.hostname + ":28951";
+  const VM_SHOW_MS = 45000;
+  let vmTimer = null;
+  function vmChip(ev) {
+    const chip = $("vm-chip");
+    chip.hidden = !ev.on;
+    chip.dataset.camera = ev.camera || "";
+    $("vm-chip-text").textContent = ev.camera === "unreadable" ? "Visual memory: view may be obstructed"
+      : ev.mode === "demo" ? "Visual memory on (demo)" : "Visual memory on";
+  }
+  function vmShow(ev) {
+    const img = document.createElement("img"); // made only when there is a picture to show
+    img.alt = "What the camera saw";
+    img.src = VISMEM + "/display/image/" + ev.key + ".jpg";
+    $("vm-pic").replaceChildren(img);
+    $("vm-caption").textContent = ev.caption || "";
+    $("vm-show").hidden = false;
+    clearTimeout(vmTimer);
+    vmTimer = setTimeout(vmHide, VM_SHOW_MS);
+  }
+  function vmHide() { $("vm-show").hidden = true; $("vm-pic").replaceChildren(); }
+  function vmConnect(delay) {
+    if (DEMO || !state.device || typeof EventSource === "undefined") return;
+    setTimeout(() => {
+      const es = new EventSource(VISMEM + "/display/events");
+      let opened = false;
+      es.onopen = () => { opened = true; };
+      es.onmessage = (m) => {
+        let ev;
+        try { ev = JSON.parse(m.data); } catch { return; }
+        if (ev.type === "vismem") vmChip(ev);
+        else if (ev.type === "vismem_show") vmShow(ev);
+        else if (ev.type === "vismem_hide") vmHide();
+      };
+      es.onerror = () => {
+        es.close(); // not running (or not allowed): look again later, quietly
+        $("vm-chip").hidden = true;
+        vmConnect(opened ? 3000 : 60000);
+      };
+    }, delay);
+  }
+  $("vm-show").addEventListener("click", vmHide);
+  vmConnect(0);
 
   // ---------------------------------------------------------------------------- feed handling --
   function onEvent(ev) {

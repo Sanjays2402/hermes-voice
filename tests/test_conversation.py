@@ -86,11 +86,13 @@ async def test_per_conversation_session(hass: HomeAssistant, aioclient_mock: Aio
         assert "X-Hermes-Session-Key" not in headers
         assert body["stream"] is True  # streaming is the default
         assert body["model"] == "voice-spike"
-        # system (voice instruction, then the local time) + only the latest user message: Hermes holds the history.
+        # system (the voice instruction, the same every turn so Hermes' prompt cache holds) + only the latest
+        # user message, after the local time: Hermes holds the history.
         system, user = body["messages"]
-        assert system["role"] == "system"
-        assert system["content"].startswith(DEFAULT_VOICE_INSTRUCTION + "\nCurrent local date and time: ")
-        assert user == {"role": "user", "content": text}
+        assert system == {"role": "system", "content": DEFAULT_VOICE_INSTRUCTION}
+        assert user["role"] == "user"
+        assert user["content"].startswith("[Current local date and time: ")
+        assert user["content"].endswith("]\n\n" + text)
 
 
 async def test_same_opening_phrase_does_not_collide(
@@ -194,16 +196,22 @@ async def test_local_time_sent(
     await _say(hass, "What time is it?")
     freezer.move_to("2026-11-06 05:05:00+00:00")
     await _say(hass, "And now?")
-    systems = [body["messages"][0] for body, _ in _chat_calls(aioclient_mock)]
-    assert systems == [
-        {
-            "role": "system",
-            "content": "Current local date and time: Thursday, November 5, 2026, 3:47 PM (America/Chicago).",
-        },
-        {
-            "role": "system",
-            "content": "Current local date and time: Thursday, November 5, 2026, 11:05 PM (America/Chicago).",
-        },
+    sent = [body["messages"] for body, _ in _chat_calls(aioclient_mock)]
+    assert sent == [
+        [
+            {
+                "role": "user",
+                "content": "[Current local date and time: Thursday, November 5, 2026, 3:47 PM (America/Chicago).]"
+                "\n\nWhat time is it?",
+            }
+        ],
+        [
+            {
+                "role": "user",
+                "content": "[Current local date and time: Thursday, November 5, 2026, 11:05 PM (America/Chicago).]"
+                "\n\nAnd now?",
+            }
+        ],
     ]
 
 

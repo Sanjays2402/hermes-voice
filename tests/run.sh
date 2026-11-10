@@ -11,7 +11,11 @@ if ! diff -rq -x __pycache__ "$ROOT/custom_components/hermes_voice" "$ASSETS/her
    ! cmp -s "$ROOT/wakeword/model/hey_hermes.json" "$ASSETS/wakeword/hey_hermes.json" ||
    ! cmp -s "$ROOT/wakeword/model/MODEL_NOTICE.md" "$ASSETS/wakeword/MODEL_NOTICE.md" ||
    ! diff -rq -x build -x .gitignore "$ROOT/devices/echo/eye-app" "$ASSETS/eye/app" >/dev/null ||
-   ! cmp -s "$ROOT/extras/eye/eye_mcp.py" "$ASSETS/eye/eye_mcp.py"; then
+   ! cmp -s "$ROOT/extras/eye/eye_mcp.py" "$ASSETS/eye/eye_mcp.py" ||
+   ! diff -rq -x __pycache__ "$ROOT/extras/visual-memory/vismem" "$ASSETS/visual-memory/vismem" >/dev/null ||
+   ! cmp -s "$ROOT/extras/visual-memory/pyproject.toml" "$ASSETS/visual-memory/pyproject.toml" ||
+   ! cmp -s "$ROOT/extras/visual-memory/config.example.toml" "$ASSETS/visual-memory/config.example.toml" ||
+   ! cmp -s "$ROOT/extras/visual-memory/README.md" "$ASSETS/visual-memory/README.md"; then
   echo "skill assets are out of date: run tools/sync_skill_assets.sh" >&2
   exit 1
 fi

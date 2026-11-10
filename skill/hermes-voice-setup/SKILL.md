@@ -41,6 +41,7 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
 | Next up suggestion on the screen (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/screen_activity.py --profile voice --next-up on` (`off` to remove) |
 | Show every profile's work (opt-in) | `python3 ${HERMES_SKILL_DIR}/scripts/ha_setup.py --profile voice --screen-activity all` |
 | Camera for Hermes (Echo Show): check / install | `python3 ${HERMES_SKILL_DIR}/scripts/eye_setup.py --check` / `--profile voice` |
+| Visual memory (needs the camera): check / install / remove | `python3 ${HERMES_SKILL_DIR}/scripts/vismem_setup.py --check` / `--profile voice` / `--uninstall --profile voice` |
 | Device guide | `${HERMES_SKILL_DIR}/references/devices.md` |
 | What it changes, and how to undo each (read before removing anything) | `${HERMES_SKILL_DIR}/references/changes-and-undo.md` |
 
@@ -147,7 +148,31 @@ The skill code is MIT-licensed. The bundled `hey_hermes.tflite` wake word model 
      profile (backed up first), restarts the gateway, and takes a test picture.
    - If it says the app was signed with another key, rerun it with `--reinstall`.
    - The Echo must be plugged into this computer by USB, with echo-dot-assist's root adb.
-6. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
+6. **Visual memory (optional, needs step 5).** Offer it: Hermes remembers what the camera saw and can
+   answer "what's in front of you?", "what changed?" or "where did you last see my keys?", with
+   before/after pictures on the screen. Tell them first:
+   - It is **off** until they say "Hey Hermes, turn on visual memory"; while on, the REC badge and a
+     "Visual memory on" chip show, and "turn off visual memory" stops it at once.
+   - It checks one picture a second on this computer and watches the desk, not the room. A vision model
+     looks only when it's turned on, when the camera is uncovered, and when they ask (at most 20 looks an
+     hour). The model is their Codex CLI on their ChatGPT plan (no new bill; it counts toward that plan's
+     limits; pictures go to OpenAI), or a local vision model they already run in Ollama or LM Studio
+     (pictures stay at home). Ask which.
+   - Memory and snapshots stay on this computer, are deleted after 14 days, and can be deleted any time.
+   - No video, no face recognition, people are ignored.
+
+   On their yes:
+   - Run `vismem_setup.py --check`. With Codex it needs the Codex CLI signed in; if it is missing, show
+     `npm install -g @openai/codex` and `codex login`, and run them only after the user agrees. With a
+     local model, add `--local-model <name>` (a vision model, from `ollama list` or LM Studio's list) and,
+     for LM Studio, `--local-url http://127.0.0.1:1234/v1` to the commands below.
+   - Run `vismem_setup.py --profile voice --dry-run`, then `vismem_setup.py --profile voice`. It installs
+     the service in its own Python environment (about 60 MB of packages), writes its settings, starts it
+     now and at login, adds the visual memory tools to the profile (backed up first) and restarts the
+     gateway.
+   - If the status says the camera is "offline" on macOS, the service's Python needs Local Network access:
+     System Settings > Privacy & Security > Local Network.
+7. **Verify.** `verify.py --recall` sends three turns through HA's conversation API (three model calls).
    With an existing HA, pass the same `--ha-url HA_URL --token-file FILE`.
    Success = a reply in the profile's own voice/personality and `"recalled": true`.
 

@@ -1,0 +1,56 @@
+# Hermes Visual Memory settings. Copy to ~/.config/hermes-voice/visual-memory.toml and change what you need;
+# anything left out keeps the default shown here.
+
+# The camera: Hermes Eye on the Echo Show (docs/eye.md), and the token given to it.
+eye_url = "http://192.168.1.10:28940"
+eye_token_file = "~/.config/hermes-voice/secrets/eye_token"
+
+# Where memory (SQLite + snapshots) lives. Nothing leaves this computer except snapshots sent for analysis.
+data_dir = "~/.local/share/hermes-visual-memory"
+
+# The API Hermes uses (this computer only) and the feed the Echo's screen reads. The feed admits only the
+# addresses in display_allow; empty means the Echo's own address (from eye_url) and this computer.
+api_port = 28950
+display_port = 28951
+display_allow = []
+
+# Sampling: one picture a second; a scene counts as steady after this long without movement.
+sample_seconds = 1.0
+stable_seconds = 2.5
+
+# Which model looks at pictures: "codex" (your Codex CLI, on your ChatGPT plan; no separate API key or bill)
+# or "local" (any OpenAI-compatible server with a vision model; pictures stay on your network).
+vision = "codex"
+# gpt-6.1-sol names things most reliably; gpt-6-luna (quick_model) is about twice as fast and is used for
+# every look someone is waiting for.
+model = "gpt-6.1-sol"
+quick_model = "gpt-6-luna"
+reasoning_effort = "low"
+# Local: Ollama http://127.0.0.1:11434/v1, LM Studio http://127.0.0.1:1234/v1.
+local_url = "http://127.0.0.1:11434/v1"
+local_model = ""            # e.g. "qwen3.6:35b-a3b-nvfp4"
+local_quick_model = ""      # empty: local_model
+local_keep_alive = "30m"    # Ollama keeps the model loaded this long after visual memory is turned on
+
+# Looks happen when it's turned on (finding the desk), when the camera is uncovered, and when asked.
+look_after_uncover = true
+# A question waits this long for its look before Hermes says it's still looking (the Echo stops waiting for
+# a spoken answer 15 s after the question). 0 = wait for the look.
+quick_wait = 9
+# Looks per hour (0 = no limit).
+manual_per_hour = 20
+# With a local model ("auto"), it also looks whenever the desk changes and settles (free; at most one
+# look every settled_min_interval seconds), so "what's in front of you?" answers without waiting.
+look_when_settled = "auto"
+settled_min_interval = 10
+# true: look at every settled change with any model, with these limits.
+auto_analyze = false
+min_auto_interval = 60
+auto_per_hour = 10
+auto_per_day = 30
+
+# Pictures are deleted after retention_days; observations (text) after history_days.
+retention_days = 14
+history_days = 90
+# Start watching again by itself after a restart (otherwise it waits to be turned on).
+resume_after_restart = false

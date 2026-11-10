@@ -58,6 +58,12 @@ def time_context(now: datetime) -> str:
     return f"Current local date and time: {when} ({zone})."
 
 
+def with_notes(text: str, notes: list[str]) -> str:
+    """The user's words, after this turn's context notes in brackets (the time, the recipe, video mode)."""
+    lines = [f"[{n}]" for n in notes if n.strip()]
+    return "\n".join([*lines, "", text]) if lines else text
+
+
 def render_user_key(template: str, user_id: str | None, device_id: str | None) -> str | None:
     """Expand the user_key option. Empty -> no header. Placeholders: {user_id}, {device_id}."""
     template = (template or "").strip()
@@ -144,20 +150,24 @@ class HermesConversationEntity(conversation.ConversationEntity):
             # After tap to correct, Home Assistant starts a new conversation: keep Hermes' thread.
             session_id = hub.take_retry(user_input.device_id) or session_id
             hub.sessions[user_input.device_id] = session_id
+        # Hermes puts the system message ahead of the conversation history, so anything that changes from
+        # turn to turn there (the clock, the recipe step, video mode) makes the model re-read the whole
+        # history instead of reusing its prompt cache. Those lines ride on the user's message instead.
         system_parts = [self._opt(CONF_VOICE_INSTRUCTION) or ""]
-        if self._opt(CONF_SEND_TIME):
-            system_parts.append(time_context(dt_util.now()))
         if user_input.extra_system_prompt:
             system_parts.append(user_input.extra_system_prompt)
-        if hub and (cooking := hub.cook_context(user_input.device_id)):
-            system_parts.append(cooking)
-        if hub and (watching := hub.video_context(user_input.device_id)):
-            system_parts.append(watching)
         system_prompt = "\n".join(p for p in system_parts if p.strip()) or None
+        notes = []
+        if self._opt(CONF_SEND_TIME):
+            notes.append(time_context(dt_util.now()))
+        if hub and (cooking := hub.cook_context(user_input.device_id)):
+            notes.append(cooking)
+        if hub and (watching := hub.video_context(user_input.device_id)):
+            notes.append(watching)
 
         request = {
             "model": data.model,
-            "user_text": user_input.text,
+            "user_text": with_notes(user_input.text, notes),
             "system_prompt": system_prompt,
             "session_id": session_id,
             "user_key": render_user_key(self._opt(CONF_USER_KEY), user_id, user_input.device_id),

@@ -229,8 +229,9 @@ async def test_hermes_opens_recipe_and_cooking_commands(
         hass, "How much salt?", "c-3", Context(user_id="u"), agent_id=AGENT, device_id=device_id
     )
     body = aioclient_mock.mock_calls[-1][2]
-    system = next(m["content"] for m in body["messages"] if m["role"] == "system")
-    assert 'screen shows the recipe "Greek Chicken Pitas"' in system and "step 1 of 2" in system
+    said = body["messages"][-1]["content"]
+    assert 'screen shows the recipe "Greek Chicken Pitas"' in said and "step 1 of 2" in said
+    assert said.endswith("\n\nHow much salt?")
 
     await conversation.async_converse(
         hass, "close the recipe", "c-4", Context(user_id="u"), agent_id=AGENT, device_id=device_id
@@ -239,7 +240,7 @@ async def test_hermes_opens_recipe_and_cooking_commands(
         hass, "next step", "c-5", Context(user_id="u"), agent_id=AGENT, device_id=device_id
     )
     # Nothing open any more: "next step" went to Hermes.
-    assert aioclient_mock.mock_calls[-1][2]["messages"][-1]["content"] == "next step"
+    assert aioclient_mock.mock_calls[-1][2]["messages"][-1]["content"].endswith("]\n\nnext step")
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=4))  # Hermes' reply opened it again
     await hass.async_block_till_done()
 

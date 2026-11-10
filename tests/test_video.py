@@ -89,10 +89,9 @@ async def test_video_mode_flow(
         await conversation.async_converse(
             hass, said, f"c-{n}", Context(user_id="u"), agent_id=AGENT, device_id=device_id
         )
-        system = next(
-            m["content"] for m in aioclient_mock.mock_calls[-1][2]["messages"] if m["role"] == "system"
-        )
-        assert "Video mode is on" in system
+        messages = aioclient_mock.mock_calls[-1][2]["messages"]
+        assert "Video mode is on" in messages[-1]["content"]
+        assert not any("Video mode" in m["content"] for m in messages if m["role"] == "system")
         got = await _events(ws, 3)  # heard, delta, reply_done
         if n == 4:
             got += await _events(ws, 1)

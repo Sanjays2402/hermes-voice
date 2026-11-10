@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.2.0 — 2026-11-08
+## 0.2.0 — 2026-11-09
+
+- Hermes Visual Memory (`extras/visual-memory`): Hermes remembers what the Echo Show's camera saw and answers
+  "what's in front of you?", "what changed?", "where did you last see …?" and "what was here earlier?",
+  with before/after pictures on the Echo's screen. One picture a second is checked locally (quality,
+  steadiness, real change; changed views are saved on the computer). The vision model looks only when
+  visual memory is turned on, when the camera is uncovered, and when asked (with a local model, which costs
+  nothing, also when the desk changes and settles). The first
+  look finds the desk; only the desk is compared and tracked (people, chairs and the room behind are
+  ignored), or the whole view on request. Vision by the user's Codex CLI or a local model on any
+  OpenAI-compatible server (Ollama, LM Studio; `--local-model`).
+  A covered camera is "may be obstructed", not "everything is gone"; an object that can't be seen is told
+  apart as possibly hidden, gone from a visible spot, or just not re-detected. SQLite memory, retention and
+  delete controls, off until turned on, a launchd service. Seven Hermes tools (MCP).
+- Setup skill: an optional visual memory step (`vismem_setup.py`): installs the service in its own Python
+  environment, starts it at login (launchd or systemd), connects the tools; `--check`, `--dry-run`,
+  `--uninstall [--delete-data]`. Visual memory stays off until the user turns it on.
+- Screen: a "Visual memory on" chip and the pictures Hermes shows; tool names for visual memory and agent tasks.
+- Agent tasks (`extras/agent-tasks`): a read-only view of the other Hermes agents' task boards and schedules
+  for a voice profile. Only list/show commands can run; nothing can be created, assigned or handed off.
+- Faster replies on long conversations: the lines that change every turn (the local time, the open recipe,
+  video mode) now go in a short bracketed note in front of the user's words instead of the system message.
+  Hermes puts the system message ahead of the conversation history, so a changing clock there made the
+  model re-read the whole history each turn. Prompt-cache reuse went from about 55% to about 97%.
 
 - Hermes Eye (`devices/echo/eye-app`, [docs/eye.md](docs/eye.md)): the Echo Show's camera for a vision
   service on the LAN. A 21 KB app with no screen. It serves snapshots and MJPEG with a token, opens the
