@@ -53,6 +53,18 @@ last one → memory: what stayed, moved, appeared; what can't be seen, and why
     be obstructed now");
   - its spot is visible and changed, nothing in front → *missing* ("it was on the left, but I don't see it
     there anymore" — never "it was taken").
+  - When the model was shown the spot and said the object is gone (or, with a local model, simply didn't
+    list it), it's *missing* unless something covers at least 80% of its spot. Before this, moving a mouse
+    onto 41% of a snow globe's spot made the globe "maybe hidden" instead of gone.
+- **What counts as a thing on the desk.** The model is asked only for loose things lying or standing on the
+  work surface, that someone could pick up and take away. It skips lamps, microphone stands, monitor arms
+  and anything clamped, mounted or hanging (a desk lamp and a hanging pendant used to show up as desk items).
+  Something is on the desk when its bottom edge is inside the desk area and at least 35% of its height is
+  over it.
+- **One thing, one name.** A thing made of parts is one object: the model is told so, and if it still lists
+  "snow globe" and "van-shaped snow globe base" with touching boxes, they are merged into one ("snow
+  globe"), so taking the globe doesn't report the base as a separate change. Names are tidied for speech
+  ("green-capped-marker" → "green-capped marker").
 - **Objects** are remembered by what they look like (category, colours, markings, position, neighbours), not
   by permanent identities. The model links an object to an earlier one; if it doesn't, the same kind of
   thing (one candidate, no clashing colour) or the same spot and size links it. A colour that wasn't clear
@@ -69,8 +81,13 @@ Either the user's own **Codex CLI** (default), or **a local model** on any OpenA
 `vismem_setup.py --profile voice --local-model <name> [--local-url …]`). With a local model, pictures never
 leave the network. Local models are shown only the current picture (`model_compares = "auto"`): given
 the earlier list to compare with, qwen3.6 copied it back in 2 of 3 tries ("still there" for a snow globe
-that had been taken), so the matching to earlier objects is done locally, by kind and spot. Ollama models are loaded when visual memory is turned on and kept loaded for
-`local_keep_alive` (a cold load took 30–60 s).
+that had been taken), so the matching to earlier objects is done locally, by kind and spot. Only objects
+seen in the last look are compared with; older ones aren't brought back (they once made it report things
+long gone from the desk). Ollama models are loaded when visual memory is turned on and kept loaded for
+`local_keep_alive` (a cold load took 30–60 s). A look waits up to 180 s for that load before its own
+timeout starts. If the first look still fails, it is tried again 5 s later, and until it succeeds
+nothing is called "new" (Hermes says it doesn't have a first view yet). Before this fix, a first look
+that timed out was never retried, so everything on the desk was later reported "added".
 
 | local model (Mac Studio M1 Max, Ollama) | one picture | compare two | notes |
 |---|---|---|---|
@@ -162,8 +179,8 @@ Local API (127.0.0.1:28950, `Authorization: Bearer <data_dir/api_token>`): `GET 
 - One still picture a second is looked at in memory and dropped; no video is recorded. Snapshots are kept
   only for analysed scenes, and are deleted after `retention_days` (14); observations after `history_days`
   (90). `vismem forget …` deletes on request.
-- Snapshots leave this computer only when analysed: they go to OpenAI through the user's Codex CLI. The
-  model is told to ignore people. There is no face recognition and no record of who was there.
+- With Codex, snapshots leave this computer only when analysed: they go to OpenAI through the user's
+  Codex CLI. With a local model they never leave the network. The model is told to ignore people. There is no face recognition and no record of who was there.
 - The camera's shutter and the Echo's mute button are respected: both stop the picture at the source.
 - Data lives in `~/.local/share/hermes-visual-memory` (this account only, 0700/0600). The API listens on
   127.0.0.1 with a token; the display feed listens on the LAN but only answers the Echo's own address, and
@@ -171,11 +188,14 @@ Local API (127.0.0.1:28950, `Authorization: Bearer <data_dir/api_token>`): `GET 
 
 ## Tests
 
-`.venv/bin/python -m pytest` — 49 tests: picture quality, light and camera nudges, a hand over the lens,
+`.venv/bin/python -m pytest` — 61 tests: picture quality, light and camera nudges, a hand over the lens,
 cover/uncover with no change (no model call), missing/moved/added, a box in front of an object, a thin
 thing laid over an empty spot, an object the model overlooks or renames, ambiguous screwdrivers, persistence
-across a restart, rate limits, the HTTP API, token, display allow-list and evidence pictures. Synthetic
-scenes and a scripted model; no real photos are in the repository.
+across a restart, rate limits, the HTTP API, token, display allow-list and evidence pictures. Added after
+the local-model tests: a failed first look is retried; parts merged into one thing; spoken answers skip
+small nudges; looks when the desk settles; something taken while another thing moves onto its spot; and
+a replay of the live snow globe failure (fails on the old code). Synthetic scenes and a scripted model;
+no real photos are in the repository.
 
 Live results on the Echo Show 5 (2026-11-08):
 
@@ -192,11 +212,51 @@ Live results on the Echo Show 5 (2026-11-08):
 | K voice | passed: "what changed?" on the Echo, answered by the voice profile from memory (6.7 s). |
 | L evidence | passed: before/after pictures on the Echo's screen, changes boxed. |
 
+Live with a local model on the Echo Show 5 (2026-11-09, `qwen3.6:35b-a3b-nvfp4` through Ollama on a Mac
+Studio M1 Max, about 24 GB of memory while loaded). Each problem found, and what was changed:
+
+| what happened | why | fix |
+|---|---|---|
+| Took one thing away; Hermes said the other two were "added" | the first look hit the 30 s timeout while the model was still loading, and was never retried | wait for the load, retry the first look, never call things new without one |
+| A snow globe was listed as "snow globe" and "van-shaped snow globe base" | the model named parts separately | prompt: one thing, one name; touching boxes with a shared name are merged |
+| A desk lamp and a hanging pendant were tracked as desk items | the prompt asked for objects on the surface, and the model read that loosely | prompt: loose things only; the 35%-on-the-desk rule |
+| Snow globe taken and a mouse moved onto its spot: only "marker moved" | the mouse covered 41% of the globe's spot, so the globe was judged "maybe hidden" | gone when the model doesn't see it, unless 80% of its spot is covered |
+| Answers mentioned things no longer on the desk | items from older looks were compared again, and a big box overruled "gone" | compare only with the last look's objects |
+| "the coffee mug moved" for a small nudge | every move was spoken | the spoken line skips moves within the same spot; when something is missing it says only that, plus anything new |
+| Turning on: "OK, I'm watching" came after 7.8 s | the agent checked the status again after turning on | the tool's reply says no status check is needed (the agent may still do it) |
+
+All of these were fixed in code and replayed against the saved pictures from those sessions (the snow globe
+case: before the fix "maybe hidden", after it "gone"). The fixes have not been retested live on the Echo
+yet.
+
+What still doesn't work well with qwen3.6: keys and small metal things get a different name on nearly every
+look ("keychain", "metal keys", "metal clip", "metal cross"), and sometimes aren't listed at all. Bigger,
+distinct things (a snow globe, a marker, a mouse) are reliable.
+
+**Times** (the 11:05 PM run, three things on the desk):
+
+| step | time |
+|---|---|
+| one look by the model (warm) | 4.7–6.9 s |
+| first look after a cold start | 30–60 s (model load) + one look |
+| question → spoken reply | 8.4–9.5 s |
+| … the agent choosing the tool | ~2.5 s |
+| … the tool (usually waiting for a look already running) | 2–3.5 s |
+| … the agent writing the reply | 2.5–3.6 s |
+
+About 5 s of every answer is the voice agent itself, not the camera or the vision model. "What did I take
+away?" is often quicker than "what's in front of you?", because the comparison starts the moment the camera
+is uncovered.
+
 ## Limitations
 
 - A question answered by a fresh look takes as long as the look (5–7 s with Codex's quick model, 12–22 s
-  when Codex is busy; 7–12 s with qwen3.6 locally). Past `quick_wait` (9 s) Hermes says it's still looking
+  when Codex is busy; 5–7 s with qwen3.6 locally). Past `quick_wait` (9 s) Hermes says it's still looking
   and the pictures appear on the screen when done; the Echo stops waiting for speech 15 s after a question.
+  On top of that, the voice agent itself takes about 5 s per answer.
+- Small metal things (keys, clips) are named differently on nearly every look by local models, and sometimes
+  missed. Bigger, distinct objects work much better for the demo.
+- The first look after the local model was unloaded waits for it to load (30–60 s).
 
 - A hand or arm resting on the desk is a change like anything else (it is only saved, not looked at).
 - Analyses take 10–19 s with `gpt-6.1-sol`. "What changed?" asked right after uncovering waits for the
