@@ -284,6 +284,21 @@ async def test_error_paths_speak_fallback(
     assert KEY not in caplog.text
 
 
+async def test_content_parts_spoken(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    """A reply whose content is a list of parts is spoken, not crashed on."""
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.post(
+        CHAT,
+        json=reply(
+            [
+                {"type": "text", "text": "It is sunny"},
+                {"type": "text", "text": " in Dallas."},
+            ]
+        ),
+    )
+    assert _speech(await _say(hass, "hello")) == "It is sunny in Dallas."
+
+
 async def test_custom_fallback_message(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
     """The fallback text is configurable."""
     await _setup(hass, aioclient_mock, {CONF_FALLBACK_MESSAGE: "Brain offline."})

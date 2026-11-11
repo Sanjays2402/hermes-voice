@@ -222,6 +222,25 @@ async def test_length_after_text_keeps_text(hass: HomeAssistant, aioclient_mock:
     assert _assistant_text(hass, await _say(hass)) == "Checking now."
 
 
+async def test_content_parts_streamed(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    """A streamed delta whose content is a list of parts is spoken."""
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.post(
+        CHAT,
+        text=stream(
+            chunk(
+                [
+                    {"type": "text", "text": "It is sunny"},
+                    {"type": "text", "text": " in Dallas."},
+                ]
+            ),
+            chunk(finish="stop"),
+        ),
+        headers=SSE,
+    )
+    assert _speech(await _say(hass)) == "It is sunny in Dallas."
+
+
 async def test_stream_option_off_uses_json(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
     """With streaming off the request asks for one JSON reply."""
     await _setup(hass, aioclient_mock, {CONF_STREAM: False})

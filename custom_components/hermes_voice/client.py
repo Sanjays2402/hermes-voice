@@ -70,6 +70,24 @@ def _looks_rate_limited(text: str | None) -> bool:
     return any(marker in low for marker in _RATE_LIMIT_MARKERS)
 
 
+def _text_content(content: Any) -> str:
+    """Message content as plain text.
+
+    OpenAI allows content to be a string or a list of content parts; Hermes
+    passes provider replies through, so join the text parts instead of
+    crashing on a list.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text") or ""
+            for part in content
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        )
+    return ""
+
+
 @dataclass(slots=True)
 class HermesReply:
     """A successful agent reply."""
@@ -282,7 +300,7 @@ class HermesClient:
                         # A benign finish such as "length" keeps the text already
                         # streamed instead of discarding it as a failure.
                         _raise_if_failed(frame.get("hermes") or {}, finish, frame.get("error"), hermes_error)
-                    text = delta.get("content") if isinstance(delta, dict) else None
+                    text = _text_content(delta.get("content")) if isinstance(delta, dict) else None
                     if text:
                         if not got_text:
                             _raise_if_provider_failure(text)
@@ -338,7 +356,7 @@ class HermesClient:
             data = {}
         try:
             choice = data["choices"][0]
-            text = choice["message"].get("content") or ""
+            text = _text_content(choice["message"].get("content"))
             finish_reason = choice.get("finish_reason")
         except (KeyError, IndexError, TypeError, AttributeError) as err:
             raise HermesAgentError("malformed response") from err
