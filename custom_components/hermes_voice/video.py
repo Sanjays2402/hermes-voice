@@ -18,7 +18,7 @@ NUDGE = 3  # replies in a row without the camera before the screen asks "done wi
 LOOK_TOOL = "look"  # Hermes Eye's tool (extras/eye), called mcp__<server>__look by Hermes
 
 _FILLER = re.compile(
-    r"^(?:(?:ok(?:ay)?|alright|all right|hey|hermes|please|and|so|now|um|uh|yes|yeah|no)\s+)+"
+    r"^(?:ok(?:ay)?|alright|all right|hey|hermes|please|and|so|now|um|uh|yes|yeah|no)\s+"
 )
 _CAMERA = r"(?:the )?(?:camera|video)"
 COMMANDS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -56,12 +56,18 @@ def parse_command(text: str) -> str | None:
     t = re.sub("['\u2019]", "", text.lower())
     t = re.sub(r"[^\w\s]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
-    t = _FILLER.sub("", t)
     t = re.sub(r"\s+(?:please|now)$", "", t).strip()
-    for action, pattern in COMMANDS:
-        if pattern.fullmatch(t):
-            return action
-    return None
+    # Try the words as said, then drop one leading discourse word at a time. The filler strip
+    # used to eat a whole run at once, so a command starting with a filler word ("no more video")
+    # could never match: "no" was stripped before the off pattern ever saw it.
+    while True:
+        for action, pattern in COMMANDS:
+            if pattern.fullmatch(t):
+                return action
+        stripped = _FILLER.sub("", t)
+        if stripped == t:
+            return None
+        t = stripped
 
 
 def is_look(tool: str) -> bool:

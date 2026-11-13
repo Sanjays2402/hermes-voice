@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Video mode: "no more video" now turns the camera off. The filler-word strip ate the leading
+  "no" before matching, so the off pattern's own "no more video" alternative could never fire
+  and the words went to Hermes instead.
+
 - Hermes Visual Memory is now also a native Hermes plugin (`extras/visual-memory`, `plugin.yaml`): the seven
   tools registered with Hermes, the service started inside Hermes on the first tool call, memory in Hermes's
   plugin data directory, the camera token read through Hermes. Vision goes through Hermes's own model routing
